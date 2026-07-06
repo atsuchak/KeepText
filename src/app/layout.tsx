@@ -8,8 +8,42 @@ import { Footer } from "@/components/Footer";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Blanked Note",
-  description: "A fast, minimalist notepad right in your browser.",
+  metadataBase: new URL('https://blanked-note.vercel.app'),
+  title: {
+    default: "Blanked Note",
+    template: "%s | Blanked Note",
+  },
+  description: "A fast, minimalist notepad right in your browser. Save notes locally or create an account to sync across devices.",
+  keywords: ["notepad", "notes", "minimalist", "blanked note", "online notepad"],
+  authors: [{ name: "Blanked Note" }],
+  creator: "Blanked Note",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://blanked-note.vercel.app",
+    title: "Blanked Note",
+    description: "A fast, minimalist notepad right in your browser.",
+    siteName: "Blanked Note",
+    images: [
+      {
+        url: "/og-image.png", // Make sure to create and place an og-image.png in your public folder
+        width: 1200,
+        height: 630,
+        alt: "Blanked Note",
+      }
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Blanked Note",
+    description: "A fast, minimalist notepad right in your browser.",
+    images: ["/og-image.png"],
+  },
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
 };
 
 export default function RootLayout({
