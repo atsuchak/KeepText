@@ -7,6 +7,7 @@ export interface IUser extends Document {
   mobileNumber?: string;
   tokenVersion: number;
   noteContent: string;
+  imageUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +38,10 @@ const UserSchema: Schema = new Schema(
       default: 0,
     },
     noteContent: {
+      type: String,
+      default: "",
+    },
+    imageUrl: {
       type: String,
       default: "",
     },

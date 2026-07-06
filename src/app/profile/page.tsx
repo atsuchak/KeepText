@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { User, Phone, Lock, Eye, EyeOff, LogOut, Trash2, AlertCircle, CheckCircle2, X } from "lucide-react";
-import { updateProfile, changePassword, logoutAllDevices, deleteAllNotes, deleteAccount, getProfile } from "@/actions/profile";
+import { User, Phone, Lock, Eye, EyeOff, LogOut, Trash2, AlertCircle, CheckCircle2, X, Camera } from "lucide-react";
+import { updateProfile, changePassword, logoutAllDevices, deleteAllNotes, deleteAccount, getProfile, updateProfileImage, removeProfileImage } from "@/actions/profile";
+import { signOut } from "@/actions/auth";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   
   // Security State
   const [currentPassword, setCurrentPassword] = useState("");
@@ -52,6 +54,7 @@ export default function ProfilePage() {
         setName(res.data.name);
         setMobileNumber(res.data.mobileNumber);
         setEmail(res.data.email);
+        setImageUrl(res.data.imageUrl || "");
       }
       setLoading(false);
     }
@@ -73,6 +76,44 @@ export default function ProfilePage() {
       showMessage("success", "Profile updated successfully");
     }
     setActionLoading(null);
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        showMessage("error", "Image must be less than 2MB");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        setImageUrl(base64String);
+        setActionLoading("image");
+        const res = await updateProfileImage(base64String);
+        if (res.error) showMessage("error", res.error);
+        else {
+          showMessage("success", "Profile image updated");
+          // Refresh navbar if needed, typically handled by full reload or context, but here we can just rely on user next action
+        }
+        setActionLoading(null);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    setImageUrl("");
+    setActionLoading("image");
+    const res = await removeProfileImage();
+    if (res.error) showMessage("error", res.error);
+    else showMessage("success", "Profile image removed");
+    setActionLoading(null);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push("/auth");
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -183,6 +224,39 @@ export default function ProfilePage() {
           <section className="bg-white dark:bg-[#0B1120]/80 dark:backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden">
             <div className="p-6 sm:p-8">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Basic Information</h2>
+              
+              <div className="flex items-center gap-6 mb-8">
+                <div className="relative group">
+                  <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-100 dark:bg-white/5 border-2 border-gray-200 dark:border-white/10 flex items-center justify-center relative">
+                    {imageUrl ? (
+                      <img src={imageUrl} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-10 h-10 text-gray-400" />
+                    )}
+                    <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                      <Camera className="w-6 h-6 mb-1" />
+                      <span className="text-xs font-medium">Upload</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} disabled={actionLoading === "image"} />
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-1">Profile Photo</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">JPG, PNG or GIF. Max size 2MB.</p>
+                  <div className="flex gap-3">
+                    <label className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 rounded-lg cursor-pointer transition-colors relative">
+                      {actionLoading === "image" ? "Uploading..." : "Upload New"}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} disabled={actionLoading === "image"} />
+                    </label>
+                    {imageUrl && (
+                      <button onClick={handleRemoveImage} disabled={actionLoading === "image"} className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <form onSubmit={handleUpdateProfile} className="space-y-5">
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
@@ -320,6 +394,20 @@ export default function ProfilePage() {
             <div className="p-6 sm:p-8">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Activity & Danger Zone</h2>
               <div className="space-y-4">
+                
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">Current Session</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Log out from your current session.</p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 sm:w-auto w-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium transition-colors flex justify-center items-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Logout
+                  </button>
+                </div>
                 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
                   <div>

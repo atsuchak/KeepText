@@ -216,6 +216,8 @@ export default function HistoryPage() {
       }
     }
     setIsSavingEdit(false);
+  };
+
   const handleDragStart = (e: React.DragEvent, id: string, isPinned: boolean) => {
     if (isPinned) {
       e.preventDefault();
@@ -378,19 +380,38 @@ export default function HistoryPage() {
             {notes.map((note) => (
               <div 
                 key={note._id} 
-                className={`group relative bg-white dark:bg-[#0B1120] border ${note.isPinned ? 'border-cyan-500 shadow-cyan-500/10' : 'border-gray-200 dark:border-white/10'} rounded-2xl p-6 shadow-sm hover:shadow-xl dark:shadow-none hover:border-cyan-500/50 dark:hover:border-cyan-500/50 transition-all duration-300 flex flex-col h-64`}
+                onClick={() => handleCardClick(note)}
+                draggable={!note.isPinned}
+                onDragStart={(e) => handleDragStart(e, note._id, !!note.isPinned)}
+                onDragOver={(e) => handleDragOver(e, note._id, !!note.isPinned)}
+                onDrop={(e) => handleDrop(e, note._id, !!note.isPinned)}
+                className={`group relative border ${note.isPinned ? 'bg-cyan-50/50 dark:bg-cyan-950/30 border-cyan-500 shadow-cyan-500/10' : 'bg-white dark:bg-[#0B1120] border-gray-200 dark:border-white/10'} rounded-2xl p-6 shadow-sm hover:shadow-xl dark:shadow-none hover:border-cyan-500/50 dark:hover:border-cyan-500/50 transition-all duration-300 flex flex-col h-48 cursor-pointer ${draggedNoteId === note._id ? 'opacity-50' : ''} ${dragOverNoteId === note._id ? 'border-dashed border-cyan-500 bg-gray-50 dark:bg-white/5' : ''}`}
               >
                 {note.isPinned && (
-                  <div className="absolute -top-3 -right-3 bg-gradient-to-br from-blue-600 to-cyan-500 text-white p-1.5 rounded-full shadow-lg">
+                  <div className="absolute -top-3 -right-3 bg-gradient-to-br from-blue-600 to-cyan-500 text-white p-1.5 rounded-full shadow-lg z-10">
                     <Pin className="w-4 h-4" />
                   </div>
                 )}
                 
                 <div className="flex justify-between items-start mb-4 gap-2">
-                  <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">
-                    {note.title}
-                  </h3>
-                  <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all">
+                  <div className="flex items-center gap-2 max-w-[70%]">
+                    {!note.isPinned && (
+                      <div className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" onClick={(e) => e.stopPropagation()}>
+                        <GripVertical className="w-5 h-5" />
+                      </div>
+                    )}
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">
+                      {note.title}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all" onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      onClick={(e) => handleReopen(e, note)}
+                      className="p-1.5 text-gray-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-500/10 rounded-lg transition-colors"
+                      title="Reopen Note"
+                    >
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
                     <button 
                       onClick={() => handlePinToggle(note)}
                       className={`p-1.5 rounded-lg transition-colors ${note.isPinned ? 'text-cyan-500 bg-cyan-50 dark:bg-cyan-500/10' : 'text-gray-400 hover:text-cyan-500 hover:bg-cyan-50 dark:hover:bg-cyan-500/10'}`}
@@ -415,13 +436,13 @@ export default function HistoryPage() {
                   </div>
                 </div>
                 
-                <div className="flex-1 overflow-hidden">
-                  <p className="text-gray-600 dark:text-gray-400 text-sm whitespace-pre-wrap line-clamp-6">
+                <div className="flex-1 overflow-hidden pointer-events-none">
+                  <p className="text-gray-600 dark:text-gray-400 text-sm whitespace-pre-wrap line-clamp-3">
                     {note.content}
                   </p>
                 </div>
                 
-                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs text-gray-500 dark:text-gray-500">
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs text-gray-500 dark:text-gray-500 pointer-events-none">
                   <span>{new Date(note.createdAt).toLocaleDateString()}</span>
                   <span>{new Date(note.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                 </div>
@@ -448,6 +469,45 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+
+      {/* View Modal */}
+      {viewingNote && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setViewingNote(null)}>
+          <div className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Eye className="w-6 h-6 text-cyan-500" />
+                {viewingNote.title}
+              </h3>
+              <button 
+                onClick={(e) => handleReopen(e, viewingNote)}
+                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-lg transition-all shadow-sm shadow-blue-500/25 flex items-center gap-2"
+              >
+                <ArrowUpRight className="w-4 h-4" />
+                Reopen in Editor
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed text-lg">
+                {viewingNote.content}
+              </p>
+            </div>
+
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100 dark:border-white/10">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                Created: {new Date(viewingNote.createdAt).toLocaleString()}
+              </div>
+              <button
+                onClick={() => setViewingNote(null)}
+                className="px-6 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editingNote && (

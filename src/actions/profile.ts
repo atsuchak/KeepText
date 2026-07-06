@@ -99,11 +99,39 @@ export async function getProfile() {
   
   try {
     await connectToDatabase();
-    const user = await User.findById(session.userId).select("name mobileNumber email");
+    const user = await User.findById(session.userId).select("name mobileNumber email imageUrl");
     if (!user) return { error: "User not found" };
-    return { success: true, data: { name: user.name || "", mobileNumber: user.mobileNumber || "", email: user.email } };
+    return { success: true, data: { name: user.name || "", mobileNumber: user.mobileNumber || "", email: user.email, imageUrl: user.imageUrl || "" } };
   } catch (error) {
     console.error("Error fetching profile:", error);
     return { error: "Failed to fetch profile" };
+  }
+}
+
+export async function updateProfileImage(imageUrl: string) {
+  const session = await getSession();
+  if (!session) return { error: "Unauthorized" };
+
+  try {
+    await connectToDatabase();
+    await User.findByIdAndUpdate(session.userId, { imageUrl });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating profile image:", error);
+    return { error: "Failed to update profile image" };
+  }
+}
+
+export async function removeProfileImage() {
+  const session = await getSession();
+  if (!session) return { error: "Unauthorized" };
+
+  try {
+    await connectToDatabase();
+    await User.findByIdAndUpdate(session.userId, { imageUrl: "" });
+    return { success: true };
+  } catch (error) {
+    console.error("Error removing profile image:", error);
+    return { error: "Failed to remove profile image" };
   }
 }
