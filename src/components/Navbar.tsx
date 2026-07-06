@@ -1,7 +1,7 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { Moon, Sun, UserCircle, LogOut, History } from "lucide-react";
+import { Moon, Sun, UserCircle, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSession, signOut } from "@/actions/auth";
