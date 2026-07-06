@@ -2,20 +2,22 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { getNote, saveNote } from "@/actions/notes";
-import { saveToHistory } from "@/actions/history";
+import { saveToHistory, updateHistoryItem } from "@/actions/history";
 import { 
   Save, Type, Trash2, Bold, Italic, Underline, Highlighter, 
   Baseline, Strikethrough, Heading1, Heading2, History, 
-  Link as LinkIcon, List, ListOrdered, Smile 
+  Link as LinkIcon, List, ListOrdered, Smile, Eraser
 } from "lucide-react";
 import Link from "next/link";
 
 export function NoteEditor() {
   const [content, setContent] = useState("");
+  const [currentNoteId, setCurrentNoteId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isClearFormatModalOpen, setIsClearFormatModalOpen] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
   const [savedSelection, setSavedSelection] = useState<Range | null>(null);
@@ -23,7 +25,8 @@ export function NoteEditor() {
   
   const [showToolbar, setShowToolbar] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [saveTitle, setSaveTitle] = useState("");
+  const [currentNoteTitle, setCurrentNoteTitle] = useState("");
+  const [inputTitle, setInputTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{show: boolean, message: string, type: 'success' | 'error'}>({ show: false, message: '', type: 'success' });
 
@@ -32,6 +35,12 @@ export function NoteEditor() {
   useEffect(() => {
     async function initializeNote() {
       const savedLocalContent = localStorage.getItem("blanked_note_content");
+      const savedNoteId = localStorage.getItem("blanked_note_id");
+      const savedNoteTitle = localStorage.getItem("blanked_note_title");
+      
+      if (savedNoteId) setCurrentNoteId(savedNoteId);
+      if (savedNoteTitle) setCurrentNoteTitle(savedNoteTitle);
+
       const res = await getNote();
       
       let initialHTML = "";
@@ -52,24 +61,29 @@ export function NoteEditor() {
         }
       }
       setIsLoaded(true);
-      
-      setTimeout(() => {
-        if (editorRef.current && !editorRef.current.innerHTML && initialHTML) {
-          editorRef.current.innerHTML = initialHTML;
-          const links = editorRef.current.querySelectorAll('a');
-          links.forEach(link => {
-            const href = link.getAttribute('href');
-            if (href) link.setAttribute('title', `${href} (Ctrl+Click to open)`);
-          });
-        }
-      }, 0);
     }
     
     initializeNote();
   }, []);
 
   useEffect(() => {
-    const handleSaveRequest = () => setIsSaveModalOpen(true);
+    if (isLoaded && editorRef.current) {
+      if (!editorRef.current.innerHTML && content) {
+        editorRef.current.innerHTML = content;
+        const links = editorRef.current.querySelectorAll('a');
+        links.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href) link.setAttribute('title', `${href} (Ctrl+Click to open)`);
+        });
+      }
+    }
+  }, [isLoaded]);
+
+  useEffect(() => {
+    const handleSaveRequest = () => {
+      setIsSaveModalOpen(true);
+      setInputTitle("");
+    };
     document.addEventListener("requestSaveNote", handleSaveRequest);
     return () => document.removeEventListener("requestSaveNote", handleSaveRequest);
   }, []);
@@ -112,42 +126,116 @@ export function NoteEditor() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      
+      const currentFormats = { ...activeFormats };
+      
+      document.execCommand('insertParagraph', false);
+      
+      // Reset heading format on new line
+      if (currentFormats.h1 || currentFormats.h2) {
+        document.execCommand('formatBlock', false, 'div');
+        if (document.queryCommandState('bold')) {
+          document.execCommand('bold', false);
+        }
+      } else {
+        if (currentFormats.bold && !document.queryCommandState('bold')) {
+          document.execCommand('bold', false);
+        }
+        if (currentFormats.italic && !document.queryCommandState('italic')) {
+          document.execCommand('italic', false);
+        }
+        if (currentFormats.underline && !document.queryCommandState('underline')) {
+          document.execCommand('underline', false);
+        }
+        if (currentFormats.strikeThrough && !document.queryCommandState('strikeThrough')) {
+          document.execCommand('strikeThrough', false);
+        }
+      }
+      
+      updateActiveFormats();
+    }
+  };
+
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
 
-  const handleSaveToHistory = async () => {
+  const handleSaveToHistory = async (saveAsNew = false) => {
     setIsSaving(true);
     try {
+      const isUpdate = currentNoteId && !saveAsNew;
+      let finalTitle = inputTitle;
+
+      if (!finalTitle || finalTitle.trim() === "") {
+        if (isUpdate && currentNoteTitle) {
+          finalTitle = currentNoteTitle;
+        } else {
+          const plainText = editorRef.current?.innerText || "";
+          const words = plainText.trim().split(/\s+/);
+          finalTitle = words.slice(0, 2).join(" ");
+          if (!finalTitle) finalTitle = "Untitled";
+        }
+      }
+
       if (isLoggedIn) {
-        const res = await saveToHistory(saveTitle, content);
+        let res;
+        if (isUpdate) {
+          res = await updateHistoryItem(currentNoteId!, { title: finalTitle, content });
+        } else {
+          res = await saveToHistory(finalTitle, content);
+        }
+        
         const saveRes = await saveNote(content);
         if (res.success && saveRes.success) {
           localStorage.removeItem("blanked_note_content");
-          showToast("Note saved successfully!");
+          if (res.note?._id) {
+            setCurrentNoteId(res.note._id);
+            setCurrentNoteTitle(res.note.title);
+            localStorage.setItem("blanked_note_id", res.note._id);
+            localStorage.setItem("blanked_note_title", res.note.title);
+          }
+          showToast(isUpdate ? "Note updated successfully!" : "Note saved successfully!");
         } else {
           showToast(res.error || saveRes.error || "Failed to save note", 'error');
         }
       } else {
         const historyStr = localStorage.getItem("blanked_note_history");
         const history = historyStr ? JSON.parse(historyStr) : [];
-        let finalTitle = saveTitle;
-        if (!finalTitle || finalTitle.trim() === "") {
-          const plainText = editorRef.current?.innerText || "";
-          const words = plainText.trim().split(/\s+/);
-          finalTitle = words.slice(0, 2).join(" ");
-          if (!finalTitle) finalTitle = "Untitled";
+        
+        let newId = Date.now().toString();
+        if (isUpdate) {
+          const index = history.findIndex((n: any) => n._id === currentNoteId);
+          if (index !== -1) {
+            history[index].title = finalTitle;
+            history[index].content = content;
+            newId = currentNoteId!;
+          } else {
+            history.push({
+              _id: newId,
+              title: finalTitle,
+              content,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        } else {
+          history.push({
+            _id: newId,
+            title: finalTitle,
+            content,
+            createdAt: new Date().toISOString(),
+          });
         }
-        const newNote = {
-          _id: Date.now().toString(),
-          title: finalTitle,
-          content,
-          createdAt: new Date().toISOString(),
-        };
-        history.push(newNote);
+        
         localStorage.setItem("blanked_note_history", JSON.stringify(history));
-        showToast("Note saved locally!");
+        setCurrentNoteId(newId);
+        setCurrentNoteTitle(finalTitle);
+        localStorage.setItem("blanked_note_id", newId);
+        localStorage.setItem("blanked_note_title", finalTitle);
+        showToast(isUpdate ? "Note updated locally!" : "Note saved locally!");
       }
     } catch (e) {
       console.error(e);
@@ -155,23 +243,55 @@ export function NoteEditor() {
     } finally {
       setIsSaving(false);
       setIsSaveModalOpen(false);
-      setSaveTitle("");
     }
   };
 
   const clearText = () => {
     if (editorRef.current) editorRef.current.innerHTML = "";
     setContent("");
+    setCurrentNoteId(null);
+    setCurrentNoteTitle("");
+    setInputTitle("");
+    localStorage.removeItem("blanked_note_id");
+    localStorage.removeItem("blanked_note_title");
+    localStorage.removeItem("blanked_note_content");
     if (isLoggedIn) saveNote("");
-    else localStorage.removeItem("blanked_note_content");
     setIsClearModalOpen(false);
     showToast("Text cleared successfully!");
   };
 
   const execFormat = (e: React.MouseEvent | React.ChangeEvent<HTMLSelectElement> | React.ChangeEvent<HTMLInputElement>, command: string, value?: string) => {
     e.preventDefault(); // Prevent losing focus
-    document.execCommand(command, false, value);
-    if (editorRef.current) editorRef.current.focus();
+
+    if (command === 'inlineH1') {
+      const currentBlock = document.queryCommandValue('formatBlock');
+      if (currentBlock && currentBlock.toLowerCase() === 'h1') {
+        document.execCommand('formatBlock', false, 'div');
+      } else {
+        document.execCommand('formatBlock', false, 'h1');
+      }
+    } else if (command === 'inlineH2') {
+      const currentBlock = document.queryCommandValue('formatBlock');
+      if (currentBlock && currentBlock.toLowerCase() === 'h2') {
+        document.execCommand('formatBlock', false, 'div');
+      } else {
+        document.execCommand('formatBlock', false, 'h2');
+      }
+    } else if (command === 'formatBlock' && typeof value === 'string') {
+      const currentBlock = document.queryCommandValue('formatBlock').toLowerCase();
+      if (currentBlock === value.toLowerCase()) {
+        // Toggle off
+        document.execCommand('formatBlock', false, 'div');
+      } else {
+        document.execCommand(command, false, value);
+      }
+    } else {
+      document.execCommand(command, false, value);
+    }
+
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.focus();
+    }
     updateActiveFormats();
   };
 
@@ -246,9 +366,10 @@ export function NoteEditor() {
           contentEditable
           onInput={handleInput}
           onClick={handleEditorClick}
+          onKeyDown={handleKeyDown}
           onKeyUp={updateActiveFormats}
           onMouseUp={updateActiveFormats}
-          className="w-full min-h-[100vh] outline-none border-none text-gray-900 dark:text-gray-100 text-lg sm:text-xl leading-relaxed font-sans empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-600 focus:outline-none [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:mb-4 [&_h1]:mt-6 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mb-3 [&_h2]:mt-5 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:mb-1 [&_a]:text-blue-500 [&_a]:underline [&_a]:cursor-pointer"
+          className="w-full min-h-[100vh] outline-none border-none text-gray-900 dark:text-gray-100 text-lg sm:text-xl leading-relaxed font-sans empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-600 focus:outline-none [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:mb-4 [&_h1]:mt-6 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mb-3 [&_h2]:mt-5 [&_font[size='6']]:text-3xl [&_font[size='6']]:font-bold [&_font[size='5']]:text-2xl [&_font[size='5']]:font-bold [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:mb-1 [&_a]:text-blue-500 [&_a]:underline [&_a]:cursor-pointer"
           data-placeholder="Start typing your note here..."
         />
       </div>
@@ -268,7 +389,7 @@ export function NoteEditor() {
             <span className="hidden md:inline">Format</span>
           </button>
           
-          <button onClick={() => setIsSaveModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-full text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 transition-all shadow-sm shadow-blue-500/25 text-sm font-medium" title="Save">
+          <button onClick={() => { setIsSaveModalOpen(true); setInputTitle(""); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 transition-all shadow-sm shadow-blue-500/25 text-sm font-medium" title="Save">
             <Save className="w-5 h-5" />
             <span className="hidden md:inline">Save</span>
           </button>
@@ -300,10 +421,10 @@ export function NoteEditor() {
           
           <div className="w-px h-6 bg-gray-300 dark:bg-white/10 mx-1" />
           
-          <button onMouseDown={(e) => execFormat(e, 'formatBlock', 'H1')} className={`p-2 rounded-lg transition-colors ${activeFormats.h1 ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Heading 1">
+          <button onMouseDown={(e) => execFormat(e, 'inlineH1')} className={`p-2 rounded-lg transition-colors ${activeFormats.h1 ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Heading 1">
             <Heading1 className="w-5 h-5" />
           </button>
-          <button onMouseDown={(e) => execFormat(e, 'formatBlock', 'H2')} className={`p-2 rounded-lg transition-colors ${activeFormats.h2 ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Heading 2">
+          <button onMouseDown={(e) => execFormat(e, 'inlineH2')} className={`p-2 rounded-lg transition-colors ${activeFormats.h2 ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Heading 2">
             <Heading2 className="w-5 h-5" />
           </button>
           
@@ -347,6 +468,19 @@ export function NoteEditor() {
           
           <div className="w-px h-6 bg-gray-300 dark:bg-white/10 mx-1" />
           
+          <button onMouseDown={(e) => {
+            e.preventDefault();
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+              setSavedSelection(selection.getRangeAt(0));
+            } else {
+              setSavedSelection(null);
+            }
+            setIsClearFormatModalOpen(true);
+          }} className="p-2 rounded-lg transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10" title="Clear Formatting">
+            <Eraser className="w-5 h-5" />
+          </button>
+          
           <select 
             onChange={(e) => execFormat(e, 'fontSize', e.target.value)}
             className="bg-transparent text-gray-600 dark:text-gray-300 border-none outline-none text-sm p-2 pr-4 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg cursor-pointer"
@@ -363,8 +497,14 @@ export function NoteEditor() {
 
       {/* Insert Link Modal */}
       {isLinkModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-11/12 max-w-md shadow-2xl">
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => { setIsLinkModalOpen(false); setSavedSelection(null); }}
+        >
+          <div 
+            className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-11/12 max-w-md shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Insert Link</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               Enter the URL you want to link to.
@@ -376,7 +516,12 @@ export function NoteEditor() {
               placeholder="https://example.com"
               className="w-full px-4 py-2 bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all mb-6"
               autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && insertLink()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  insertLink();
+                }
+              }}
             />
             <div className="flex justify-end gap-3">
               <button
@@ -398,8 +543,14 @@ export function NoteEditor() {
 
       {/* Clear Text Confirmation Modal */}
       {isClearModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-11/12 max-w-md shadow-2xl">
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setIsClearModalOpen(false)}
+        >
+          <div 
+            className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-11/12 max-w-md shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Clear Text</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
               Are you sure you want to permanently clear all text? This action cannot be undone.
@@ -422,37 +573,132 @@ export function NoteEditor() {
         </div>
       )}
 
-      {/* Save Modal */}
-      {isSaveModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-11/12 max-w-md shadow-2xl">
-            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Save Note</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Enter a title for your note (optional). If left blank, the first 2 words will be used.
+      {/* Clear Format Confirmation Modal */}
+      {isClearFormatModalOpen && (
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => { setIsClearFormatModalOpen(false); setSavedSelection(null); }}
+        >
+          <div 
+            className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-11/12 max-w-md shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Clear Formatting</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              Are you sure you want to clear formatting? If no text is selected, this will clear formatting for the entire note.
             </p>
-            <input
-              type="text"
-              value={saveTitle}
-              onChange={(e) => setSaveTitle(e.target.value)}
-              placeholder="Title..."
-              className="w-full px-4 py-2 bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all mb-6"
-              autoFocus
-            />
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setIsSaveModalOpen(false)}
+                onClick={() => { setIsClearFormatModalOpen(false); setSavedSelection(null); }}
                 className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors"
-                disabled={isSaving}
               >
                 Cancel
               </button>
               <button
-                onClick={handleSaveToHistory}
-                disabled={isSaving}
-                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-lg transition-all shadow-sm shadow-blue-500/25 disabled:opacity-50"
+                onClick={() => {
+                  if (editorRef.current) {
+                    editorRef.current.focus();
+                    const selection = window.getSelection();
+                    if (selection) {
+                      selection.removeAllRanges();
+                      if (savedSelection) {
+                        selection.addRange(savedSelection);
+                      }
+                    }
+                    
+                    if (selection && selection.isCollapsed) {
+                      document.execCommand('selectAll', false, undefined);
+                    }
+                    
+                    document.execCommand('removeFormat', false, undefined);
+                    document.execCommand('formatBlock', false, 'div');
+                  }
+                  setIsClearFormatModalOpen(false);
+                  setSavedSelection(null);
+                  updateActiveFormats();
+                  showToast("Formatting cleared!");
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-all shadow-sm shadow-red-500/25"
               >
-                {isSaving ? "Saving..." : "Save Note"}
+                Clear
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Modal */}
+      {isSaveModalOpen && (
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => { if (!isSaving) setIsSaveModalOpen(false); }}
+        >
+          <div 
+            className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-11/12 max-w-md shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Save Note</h3>
+            
+            {currentNoteId && (
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-lg text-sm border border-blue-100 dark:border-blue-800/30 flex flex-col">
+                <span className="font-semibold mb-1">Active Note:</span>
+                <span className="truncate">{currentNoteTitle || "Untitled"}</span>
+              </div>
+            )}
+            
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Enter a new title for your note (optional).
+            </p>
+            <input
+              type="text"
+              value={inputTitle}
+              onChange={(e) => setInputTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (!isSaving) {
+                    handleSaveToHistory(false);
+                  }
+                }
+              }}
+              placeholder={currentNoteId ? "Leave blank to keep existing title..." : "Title..."}
+              className="w-full px-4 py-2 bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all mb-6"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 sm:gap-3 flex-nowrap">
+              <button
+                onClick={() => setIsSaveModalOpen(false)}
+                className="px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors whitespace-nowrap"
+                disabled={isSaving}
+              >
+                Cancel
+              </button>
+              {currentNoteId ? (
+                <>
+                  <button
+                    onClick={() => handleSaveToHistory(true)}
+                    disabled={isSaving}
+                    className="px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 rounded-lg transition-all disabled:opacity-50 whitespace-nowrap"
+                  >
+                    Save as New
+                  </button>
+                  <button
+                    onClick={() => handleSaveToHistory(false)}
+                    disabled={isSaving}
+                    className="px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-lg transition-all shadow-sm shadow-blue-500/25 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {isSaving ? "Saving..." : "Update Note"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => handleSaveToHistory(false)}
+                  disabled={isSaving}
+                  className="px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-lg transition-all shadow-sm shadow-blue-500/25 disabled:opacity-50 whitespace-nowrap"
+                >
+                  {isSaving ? "Saving..." : "Save Note"}
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -203,7 +203,7 @@ export default function ProfilePage() {
         
         <div className="text-center sm:text-left mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Account Settings</h1>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Manage your profile, security, and account preferences.</p>
+
         </div>
 
         {/* Global Message Alert */}
@@ -242,10 +242,10 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-1">Profile Photo</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">JPG, PNG or GIF. Max size 2MB.</p>
+
                   <div className="flex gap-3">
                     <label className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 rounded-lg cursor-pointer transition-colors relative">
-                      {actionLoading === "image" ? "Uploading..." : "Upload New"}
+                      {actionLoading === "image" ? "Uploading..." : "Upload"}
                       <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} disabled={actionLoading === "image"} />
                     </label>
                     {imageUrl && (
@@ -316,7 +316,7 @@ export default function ProfilePage() {
           {/* Security Section */}
           <section className="bg-white dark:bg-[#0B1120]/80 dark:backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden">
             <div className="p-6 sm:p-8">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="flex flex-row items-center justify-between gap-4 mb-6">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Security</h2>
                 <button
                   type="button"

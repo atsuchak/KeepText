@@ -40,7 +40,7 @@ export function Navbar() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-inner group-hover:shadow-cyan-500/50 transition-all">
               <span className="text-white font-bold text-sm">BN</span>
             </div>
-            <h1 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 hidden sm:block">
+            <h1 className="text-base sm:text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">
               Blanked <span className="text-cyan-500">Note</span>
             </h1>
           </Link>
@@ -84,7 +84,7 @@ export function Navbar() {
                   </Link>
                   <button
                     onClick={handleSignOut}
-                    className="p-1.5 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 transition-colors"
+                    className="hidden sm:block p-1.5 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 transition-colors"
                     title="Sign Out"
                   >
                     <LogOut className="w-6 h-6" />

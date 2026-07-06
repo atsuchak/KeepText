@@ -3,6 +3,7 @@
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
 import VerificationToken from "@/models/VerificationToken";
+import NoteHistory from "@/models/NoteHistory";
 import { getSession } from "@/actions/auth";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
@@ -69,6 +70,7 @@ export async function deleteAllNotes() {
   try {
     await connectToDatabase();
     await User.findByIdAndUpdate(session.userId, { noteContent: "" });
+    await NoteHistory.deleteMany({ userId: session.userId });
     return { success: true };
   } catch (error) {
     console.error("Error deleting notes:", error);
@@ -82,6 +84,7 @@ export async function deleteAccount() {
 
   try {
     await connectToDatabase();
+    await NoteHistory.deleteMany({ userId: session.userId });
     await User.findByIdAndDelete(session.userId);
     await VerificationToken.deleteMany({ email: session.email });
     const cookieStore = await cookies();
