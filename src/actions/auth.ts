@@ -178,11 +178,11 @@ export async function getSession() {
   if (!payload) return null;
 
   await connectToDatabase();
-  const user = await User.findById(payload.userId).select('tokenVersion');
+  const user = await User.findById(payload.userId).select('tokenVersion imageUrl');
   
   if (!user || user.tokenVersion !== (payload.tokenVersion || 0)) {
     return null;
   }
 
-  return payload;
+  return { ...payload, imageUrl: user.imageUrl || "" };
 }

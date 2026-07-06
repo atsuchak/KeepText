@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { getSession } from "@/actions/auth";
-import { getHistory, clearHistory, deleteHistoryItem, updateHistoryItem } from "@/actions/history";
+import { getHistory, clearHistory, deleteHistoryItem, updateHistoryItem, updateNotesOrder } from "@/actions/history";
 import Link from "next/link";
-import { ArrowLeft, Search, Trash2, Calendar, Clock, Trash, Edit2, Pin, PinOff } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Search, Trash2, Calendar, Clock, Trash, Edit2, Pin, PinOff, GripVertical, ArrowUpRight, Eye, RefreshCw } from "lucide-react";
 
 interface Note {
   _id: string;
   title: string;
   content: string;
   isPinned?: boolean;
+  order?: number;
   createdAt: string;
 }
 
@@ -21,12 +23,18 @@ export default function HistoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOption, setSortOption] = useState("all_time"); // all_time, today, 7_days, 30_days
   const [toast, setToast] = useState<{show: boolean, message: string, type: 'success' | 'error'}>({ show: false, message: '', type: 'success' });
+  const router = useRouter();
 
-  // Edit Modal State
+  // Edit & View Modal State
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [viewingNote, setViewingNote] = useState<Note | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Drag and Drop State
+  const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
+  const [dragOverNoteId, setDragOverNoteId] = useState<string | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ show: true, message, type });
@@ -80,10 +88,11 @@ export default function HistoryPage() {
           return true;
         });
 
-        // Sort descending, pins first
+        // Sort descending, pins first, then order, then date
         localNotes.sort((a, b) => {
           if (a.isPinned && !b.isPinned) return -1;
           if (!a.isPinned && b.isPinned) return 1;
+          if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
         setNotes(localNotes);
@@ -207,6 +216,89 @@ export default function HistoryPage() {
       }
     }
     setIsSavingEdit(false);
+  const handleDragStart = (e: React.DragEvent, id: string, isPinned: boolean) => {
+    if (isPinned) {
+      e.preventDefault();
+      return;
+    }
+    setDraggedNoteId(id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string, isPinned: boolean) => {
+    e.preventDefault();
+    if (isPinned) return;
+    setDragOverNoteId(id);
+  };
+
+  const handleDrop = async (e: React.DragEvent, id: string, isPinned: boolean) => {
+    e.preventDefault();
+    setDragOverNoteId(null);
+    if (isPinned || !draggedNoteId || draggedNoteId === id) {
+      setDraggedNoteId(null);
+      return;
+    }
+
+    const newNotes = [...notes];
+    const draggedIndex = newNotes.findIndex(n => n._id === draggedNoteId);
+    const dropIndex = newNotes.findIndex(n => n._id === id);
+
+    if (draggedIndex === -1 || dropIndex === -1) return;
+
+    const [draggedNote] = newNotes.splice(draggedIndex, 1);
+    newNotes.splice(dropIndex, 0, draggedNote);
+
+    // Reassign orders for unpinned notes
+    const updates: { id: string; order: number }[] = [];
+    let currentOrder = 1;
+    
+    const updatedNotes = newNotes.map(n => {
+      if (!n.isPinned) {
+        updates.push({ id: n._id, order: currentOrder });
+        return { ...n, order: currentOrder++ };
+      }
+      return n;
+    });
+
+    setNotes(updatedNotes);
+    setDraggedNoteId(null);
+
+    if (isLoggedIn) {
+      const res = await updateNotesOrder(updates);
+      if (!res.success) showToast("Failed to save new order.", 'error');
+    } else {
+      localStorage.setItem("blanked_note_history", JSON.stringify(updatedNotes));
+    }
+  };
+
+  const handleResetOrder = async () => {
+    if (!confirm("Reset drag order to default?")) return;
+    
+    if (isLoggedIn) {
+      const updates = notes.map(n => ({ id: n._id, order: 0 }));
+      await updateNotesOrder(updates);
+      fetchNotes();
+      showToast("Order reset successfully!");
+    } else {
+      const historyStr = localStorage.getItem("blanked_note_history");
+      if (historyStr) {
+        let localNotes: Note[] = JSON.parse(historyStr);
+        localNotes = localNotes.map(n => ({ ...n, order: 0 }));
+        localStorage.setItem("blanked_note_history", JSON.stringify(localNotes));
+        fetchNotes();
+        showToast("Order reset successfully!");
+      }
+    }
+  };
+
+  const handleReopen = (e: React.MouseEvent, note: Note) => {
+    e.stopPropagation();
+    localStorage.setItem("blanked_note_content", note.content);
+    router.push("/");
+  };
+
+  const handleCardClick = (note: Note) => {
+    setViewingNote(note);
   };
 
   return (
@@ -253,6 +345,17 @@ export default function HistoryPage() {
               <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
 
+            {/* Reset Order Button */}
+            <button 
+              onClick={handleResetOrder}
+              disabled={notes.length === 0}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 rounded-xl transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Reset Order"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Reset Order
+            </button>
+
             {/* Clear All Button */}
             <button 
               onClick={handleClearAll}
@@ -271,7 +374,7 @@ export default function HistoryPage() {
             <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : notes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             {notes.map((note) => (
               <div 
                 key={note._id} 

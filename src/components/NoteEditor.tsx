@@ -16,6 +16,11 @@ export function NoteEditor() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("https://");
+  const [savedSelection, setSavedSelection] = useState<Range | null>(null);
+  const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
+  
   const [showToolbar, setShowToolbar] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
@@ -23,7 +28,6 @@ export function NoteEditor() {
   const [toast, setToast] = useState<{show: boolean, message: string, type: 'success' | 'error'}>({ show: false, message: '', type: 'success' });
 
   const editorRef = useRef<HTMLDivElement>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     async function initializeNote() {
@@ -36,8 +40,6 @@ export function NoteEditor() {
         if (savedLocalContent) {
           initialHTML = savedLocalContent;
           setContent(initialHTML);
-          await saveNote(initialHTML);
-          localStorage.removeItem("blanked_note_content");
         } else {
           initialHTML = res.content || "";
           setContent(initialHTML);
@@ -51,10 +53,14 @@ export function NoteEditor() {
       }
       setIsLoaded(true);
       
-      // Delay to ensure ref is attached
       setTimeout(() => {
         if (editorRef.current && !editorRef.current.innerHTML && initialHTML) {
           editorRef.current.innerHTML = initialHTML;
+          const links = editorRef.current.querySelectorAll('a');
+          links.forEach(link => {
+            const href = link.getAttribute('href');
+            if (href) link.setAttribute('title', `${href} (Ctrl+Click to open)`);
+          });
         }
       }, 0);
     }
@@ -63,40 +69,52 @@ export function NoteEditor() {
   }, []);
 
   useEffect(() => {
-    const handleSaveRequest = () => {
-      setIsSaveModalOpen(true);
-    };
+    const handleSaveRequest = () => setIsSaveModalOpen(true);
     document.addEventListener("requestSaveNote", handleSaveRequest);
-    return () => {
-      document.removeEventListener("requestSaveNote", handleSaveRequest);
-    };
+    return () => document.removeEventListener("requestSaveNote", handleSaveRequest);
   }, []);
 
-  const debouncedSaveToDb = useCallback((newContent: string) => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+  // Auto-refresh interval
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isLoggedIn && isLoaded) {
+      interval = setInterval(async () => {
+        const res = await getNote();
+        if (res.error === "Unauthorized") {
+          window.location.reload();
+          return;
+        }
+        if (res.success) {
+          const localDraft = localStorage.getItem("blanked_note_content");
+          if (!localDraft && editorRef.current && res.content !== editorRef.current.innerHTML) {
+            editorRef.current.innerHTML = res.content || "";
+            setContent(res.content || "");
+          }
+        }
+      }, 10000);
     }
-    saveTimeoutRef.current = setTimeout(() => {
-      saveNote(newContent);
-    }, 1000);
-  }, []);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isLoggedIn, isLoaded]);
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     const newContent = e.currentTarget.innerHTML;
     setContent(newContent);
-    
-    if (isLoggedIn) {
-      debouncedSaveToDb(newContent);
-    } else {
-      localStorage.setItem("blanked_note_content", newContent);
+    localStorage.setItem("blanked_note_content", newContent);
+  };
+
+  const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const link = target.closest('a');
+    if (link && (e.ctrlKey || e.metaKey)) {
+      window.open(link.href, '_blank');
     }
   };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ show: true, message, type });
-    setTimeout(() => {
-      setToast(prev => ({ ...prev, show: false }));
-    }, 3000);
+    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
 
   const handleSaveToHistory = async () => {
@@ -104,15 +122,16 @@ export function NoteEditor() {
     try {
       if (isLoggedIn) {
         const res = await saveToHistory(saveTitle, content);
-        if (res.success) {
+        const saveRes = await saveNote(content);
+        if (res.success && saveRes.success) {
+          localStorage.removeItem("blanked_note_content");
           showToast("Note saved successfully!");
         } else {
-          showToast(res.error || "Failed to save note", 'error');
+          showToast(res.error || saveRes.error || "Failed to save note", 'error');
         }
       } else {
         const historyStr = localStorage.getItem("blanked_note_history");
         const history = historyStr ? JSON.parse(historyStr) : [];
-        
         let finalTitle = saveTitle;
         if (!finalTitle || finalTitle.trim() === "") {
           const plainText = editorRef.current?.innerText || "";
@@ -120,14 +139,12 @@ export function NoteEditor() {
           finalTitle = words.slice(0, 2).join(" ");
           if (!finalTitle) finalTitle = "Untitled";
         }
-
         const newNote = {
           _id: Date.now().toString(),
           title: finalTitle,
           content,
           createdAt: new Date().toISOString(),
         };
-
         history.push(newNote);
         localStorage.setItem("blanked_note_history", JSON.stringify(history));
         showToast("Note saved locally!");
@@ -143,34 +160,73 @@ export function NoteEditor() {
   };
 
   const clearText = () => {
-    if (editorRef.current) {
-      editorRef.current.innerHTML = "";
-    }
+    if (editorRef.current) editorRef.current.innerHTML = "";
     setContent("");
-    if (isLoggedIn) {
-      saveNote("");
-    } else {
-      localStorage.removeItem("blanked_note_content");
-    }
+    if (isLoggedIn) saveNote("");
+    else localStorage.removeItem("blanked_note_content");
     setIsClearModalOpen(false);
     showToast("Text cleared successfully!");
   };
 
-  const execFormat = (command: string, value?: string) => {
-    if (command === 'createLink') {
-      const url = window.prompt("Enter link URL:", "https://");
-      if (!url) return;
-      document.execCommand(command, false, url);
-    } else {
-      document.execCommand(command, false, value);
-    }
-    
-    if (editorRef.current) {
-      editorRef.current.focus();
-    }
+  const execFormat = (e: React.MouseEvent | React.ChangeEvent<HTMLSelectElement> | React.ChangeEvent<HTMLInputElement>, command: string, value?: string) => {
+    e.preventDefault(); // Prevent losing focus
+    document.execCommand(command, false, value);
+    if (editorRef.current) editorRef.current.focus();
+    updateActiveFormats();
   };
 
-  const insertEmoji = (emoji: string) => {
+  const updateActiveFormats = () => {
+    setActiveFormats({
+      bold: document.queryCommandState('bold'),
+      italic: document.queryCommandState('italic'),
+      underline: document.queryCommandState('underline'),
+      strikeThrough: document.queryCommandState('strikeThrough'),
+      h1: document.queryCommandValue('formatBlock').toLowerCase() === 'h1',
+      h2: document.queryCommandValue('formatBlock').toLowerCase() === 'h2',
+      ul: document.queryCommandState('insertUnorderedList'),
+      ol: document.queryCommandState('insertOrderedList'),
+    });
+  };
+
+  const openLinkModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      setSavedSelection(selection.getRangeAt(0));
+    } else {
+      setSavedSelection(null);
+    }
+    setIsLinkModalOpen(true);
+  };
+
+  const insertLink = () => {
+    if (editorRef.current) editorRef.current.focus();
+    const selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
+      if (savedSelection) {
+        selection.addRange(savedSelection);
+      }
+    }
+    
+    if (linkUrl) {
+      document.execCommand('createLink', false, linkUrl);
+      if (editorRef.current) {
+        const links = editorRef.current.querySelectorAll('a');
+        links.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href) link.setAttribute('title', `${href} (Ctrl+Click to open)`);
+        });
+      }
+    }
+    
+    setIsLinkModalOpen(false);
+    setLinkUrl("https://");
+    setSavedSelection(null);
+  };
+
+  const insertEmoji = (e: React.MouseEvent, emoji: string) => {
+    e.preventDefault();
     document.execCommand('insertText', false, emoji);
     setShowEmojiPicker(false);
     if (editorRef.current) editorRef.current.focus();
@@ -189,8 +245,11 @@ export function NoteEditor() {
           ref={editorRef}
           contentEditable
           onInput={handleInput}
-          className="w-full min-h-[70vh] outline-none border-none text-gray-900 dark:text-gray-100 text-lg sm:text-xl leading-relaxed font-sans empty:before:content-[attr(placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-600 focus:outline-none"
-          placeholder="Start typing your note here..."
+          onClick={handleEditorClick}
+          onKeyUp={updateActiveFormats}
+          onMouseUp={updateActiveFormats}
+          className="w-full min-h-[100vh] outline-none border-none text-gray-900 dark:text-gray-100 text-lg sm:text-xl leading-relaxed font-sans empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-600 focus:outline-none [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:mb-4 [&_h1]:mt-6 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mb-3 [&_h2]:mt-5 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:mb-1 [&_a]:text-blue-500 [&_a]:underline [&_a]:cursor-pointer"
+          data-placeholder="Start typing your note here..."
         />
       </div>
 
@@ -223,51 +282,51 @@ export function NoteEditor() {
         </div>
       </div>
 
-      {/* Formatting Toolbar (Pops up above dock) */}
+      {/* Formatting Toolbar */}
       <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 bg-white/95 dark:bg-[#1a2333]/95 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl dark:shadow-black/50 transition-all duration-300 z-40 overflow-visible ${showToolbar ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
         <div className="px-4 py-3 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar max-w-[95vw] md:max-w-none">
-          <button onClick={() => execFormat('bold')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Bold">
+          <button onMouseDown={(e) => execFormat(e, 'bold')} className={`p-2 rounded-lg transition-colors ${activeFormats.bold ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Bold">
             <Bold className="w-5 h-5" />
           </button>
-          <button onClick={() => execFormat('italic')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Italic">
+          <button onMouseDown={(e) => execFormat(e, 'italic')} className={`p-2 rounded-lg transition-colors ${activeFormats.italic ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Italic">
             <Italic className="w-5 h-5" />
           </button>
-          <button onClick={() => execFormat('underline')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Underline">
+          <button onMouseDown={(e) => execFormat(e, 'underline')} className={`p-2 rounded-lg transition-colors ${activeFormats.underline ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Underline">
             <Underline className="w-5 h-5" />
           </button>
-          <button onClick={() => execFormat('strikeThrough')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Strikethrough">
+          <button onMouseDown={(e) => execFormat(e, 'strikeThrough')} className={`p-2 rounded-lg transition-colors ${activeFormats.strikeThrough ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Strikethrough">
             <Strikethrough className="w-5 h-5" />
           </button>
           
           <div className="w-px h-6 bg-gray-300 dark:bg-white/10 mx-1" />
           
-          <button onClick={() => execFormat('formatBlock', 'H1')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Heading 1">
+          <button onMouseDown={(e) => execFormat(e, 'formatBlock', 'H1')} className={`p-2 rounded-lg transition-colors ${activeFormats.h1 ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Heading 1">
             <Heading1 className="w-5 h-5" />
           </button>
-          <button onClick={() => execFormat('formatBlock', 'H2')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Heading 2">
+          <button onMouseDown={(e) => execFormat(e, 'formatBlock', 'H2')} className={`p-2 rounded-lg transition-colors ${activeFormats.h2 ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Heading 2">
             <Heading2 className="w-5 h-5" />
           </button>
           
           <div className="w-px h-6 bg-gray-300 dark:bg-white/10 mx-1" />
 
-          <button onClick={() => execFormat('insertUnorderedList')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Bullet List">
+          <button onMouseDown={(e) => execFormat(e, 'insertUnorderedList')} className={`p-2 rounded-lg transition-colors ${activeFormats.ul ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Bullet List">
             <List className="w-5 h-5" />
           </button>
-          <button onClick={() => execFormat('insertOrderedList')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Numbered List">
+          <button onMouseDown={(e) => execFormat(e, 'insertOrderedList')} className={`p-2 rounded-lg transition-colors ${activeFormats.ol ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Numbered List">
             <ListOrdered className="w-5 h-5" />
           </button>
-          <button onClick={() => execFormat('createLink')} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Insert Link">
+          <button onMouseDown={openLinkModal} className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors" title="Insert Link">
             <LinkIcon className="w-5 h-5" />
           </button>
           
           <div className="relative">
-            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Emoji">
+            <button onMouseDown={(e) => { e.preventDefault(); setShowEmojiPicker(!showEmojiPicker); }} className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? 'bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}`} title="Emoji">
               <Smile className="w-5 h-5" />
             </button>
             {showEmojiPicker && (
               <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl p-3 grid grid-cols-4 gap-2 z-50">
                 {EMOJIS.map(e => (
-                  <button key={e} onClick={() => insertEmoji(e)} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-2xl leading-none transition-colors">
+                  <button key={e} onMouseDown={(ev) => insertEmoji(ev, e)} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-2xl leading-none transition-colors">
                     {e}
                   </button>
                 ))}
@@ -279,17 +338,17 @@ export function NoteEditor() {
           
           <div className="relative group flex items-center justify-center p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors cursor-pointer">
             <Baseline className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-            <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => execFormat('foreColor', e.target.value)} title="Text Color" />
+            <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => execFormat(e, 'foreColor', e.target.value)} title="Text Color" />
           </div>
           <div className="relative group flex items-center justify-center p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors cursor-pointer">
             <Highlighter className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-            <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => execFormat('hiliteColor', e.target.value)} title="Highlight Color" />
+            <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => execFormat(e, 'hiliteColor', e.target.value)} title="Highlight Color" />
           </div>
           
           <div className="w-px h-6 bg-gray-300 dark:bg-white/10 mx-1" />
           
           <select 
-            onChange={(e) => execFormat('fontSize', e.target.value)}
+            onChange={(e) => execFormat(e, 'fontSize', e.target.value)}
             className="bg-transparent text-gray-600 dark:text-gray-300 border-none outline-none text-sm p-2 pr-4 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg cursor-pointer"
             title="Font Size"
             defaultValue="3"
@@ -301,6 +360,41 @@ export function NoteEditor() {
           </select>
         </div>
       </div>
+
+      {/* Insert Link Modal */}
+      {isLinkModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#0B1120] border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-11/12 max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Insert Link</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Enter the URL you want to link to.
+            </p>
+            <input
+              type="url"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://example.com"
+              className="w-full px-4 py-2 bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all mb-6"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && insertLink()}
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setIsLinkModalOpen(false); setSavedSelection(null); }}
+                className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={insertLink}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-all shadow-sm shadow-blue-500/25"
+              >
+                Insert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Clear Text Confirmation Modal */}
       {isClearModalOpen && (

@@ -3,6 +3,7 @@
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
 import { getSession } from "@/actions/auth";
+import { encrypt, decrypt } from "@/lib/encryption";
 
 export async function saveNote(content: string) {
   const session = await getSession();
@@ -12,7 +13,8 @@ export async function saveNote(content: string) {
 
   try {
     await connectToDatabase();
-    await User.findByIdAndUpdate(session.userId, { noteContent: content });
+    const encryptedContent = encrypt(content);
+    await User.findByIdAndUpdate(session.userId, { noteContent: encryptedContent });
     return { success: true };
   } catch (error) {
     console.error("Error saving note:", error);
@@ -32,7 +34,8 @@ export async function getNote() {
     if (!user) {
       return { error: "User not found" };
     }
-    return { success: true, content: user.noteContent || "" };
+    const decryptedContent = user.noteContent ? decrypt(user.noteContent) : "";
+    return { success: true, content: decryptedContent };
   } catch (error) {
     console.error("Error fetching note:", error);
     return { error: "Failed to fetch note" };

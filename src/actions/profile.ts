@@ -29,6 +29,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
     await connectToDatabase();
     const user = await User.findById(session.userId);
     if (!user) return { error: "User not found" };
+    if (!user.password) return { error: "Password not set for this user" };
 
     const isValidPassword = await bcrypt.compare(currentPassword, user.password);
     if (!isValidPassword) {
