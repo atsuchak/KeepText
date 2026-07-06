@@ -5,6 +5,7 @@ export interface INoteHistory extends Document {
   title: string;
   content: string;
   isPinned?: boolean;
+  order?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +29,10 @@ const NoteHistorySchema: Schema = new Schema(
     isPinned: {
       type: Boolean,
       default: false,
+    },
+    order: {
+      type: Number,
+      default: 0,
     }
   },
   {
