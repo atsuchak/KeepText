@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "@/features/notes/notes.css";
+import "@/features/auth/sign-in.css";
+import "@/features/auth/settings.css";
+import "lenis/dist/lenis.css";
+import { SmoothScroll } from "@/bootstrap/SmoothScroll";
 
 export const metadata: Metadata = {
   title: "KeepText",
@@ -24,8 +28,9 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: "try{document.documentElement.dataset.theme=localStorage.getItem('keeptext.theme')||'dark'}catch{}" }} /></head>
+      <body suppressHydrationWarning><SmoothScroll />{children}</body>
     </html>
   );
 }
