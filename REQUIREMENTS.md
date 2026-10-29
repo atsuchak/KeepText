@@ -1,5 +1,7 @@
 # Redesign requirements
 
+For the current implementation state and authentication handoff, read `PROGRESS.md`.
+
 ## Project context
 
 - This is a redesign of the existing Blanked Note project.
@@ -26,12 +28,15 @@
 ## Current branch
 
 - The previous app code has been removed from this branch.
-- A minimal Next.js App Router scaffold is in place. Product features have not been rebuilt yet.
+- The project name is `KeepText`. The UI uses a solid near-black background and white text. The wordmark uses white for "Keep" and light blue for "Text".
+- Guests can write directly on one page. Their writing is saved in browser local storage.
+- The sidebar and its toggle are reserved for signed-in users and start closed. They are hidden from guests.
+- The Sign in button opens a placeholder page until email and Google authentication are implemented.
+- Code is organized by feature. Startup storage, shared types, UI components, and styles have separate files.
 - The previous implementation remains available in Git history and on `main`.
 
 ## Decisions still needed
 
-- New project name and brand direction.
 - Specific screens, user flows, and visual references for the redesign.
 - Whether to keep MongoDB or change the database and data model.
 - Google login provider and how existing email accounts should link to Google accounts.
