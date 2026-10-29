@@ -4,4 +4,4 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-Before working on the redesign, read `REQUIREMENTS.md` for the project goals and open decisions.
+Before working on the redesign, read `REQUIREMENTS.md` for the goals and `PROGRESS.md` for the current state and next task.
