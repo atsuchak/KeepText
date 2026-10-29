@@ -2,16 +2,13 @@
   min-height: 100vh;
 }
 
-.app-shell.sidebar-open {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-}
-
 .main-panel {
   min-width: 0;
 }
 
 .site-header {
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -27,6 +24,22 @@
 
 .header-left {
   gap: 20px;
+}
+
+.signed-in-header {
+  position: relative;
+}
+
+.signed-in-header .brand {
+  margin-left: 8px;
+}
+
+.signed-in-panel .site-header {
+  height: 84px;
+}
+
+.sidebar-open .site-header {
+  background: linear-gradient(to right, #141414 260px, transparent 260px);
 }
 
 .brand {
@@ -50,6 +63,7 @@
   border: 1px solid #414141;
   border-radius: 9px;
   padding: 10px 17px;
+  background: transparent;
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -57,33 +71,156 @@
 }
 
 .sign-in-button:hover,
-.sidebar-toggle:hover,
-.sidebar-heading button:hover {
+.sidebar-toggle:hover {
   background: #1d1d1d;
 }
 
-.sidebar-toggle,
-.sidebar-heading button {
+.sidebar-toggle {
+  position: absolute;
+  left: -38px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
-  color: #fff;
-  font-size: 22px;
+  color: #aab3bd;
+  transition: left 280ms ease;
+}
+
+.sidebar-toggle[aria-expanded="true"] { left: 172px; }
+.toggle-line { position: absolute; top: 50%; left: 50%; width: 21px; height: 2px; border-radius: 2px; background: currentColor; transition: transform 280ms ease; }
+.toggle-line:first-child { transform: translate(-50%, -50%) translateY(-4px); }
+.toggle-line:last-child { transform: translate(-50%, -50%) translateY(4px); }
+.sidebar-toggle[aria-expanded="true"] .toggle-line:first-child { transform: translate(-50%, -50%) rotate(45deg); }
+.sidebar-toggle[aria-expanded="true"] .toggle-line:last-child { transform: translate(-50%, -50%) rotate(-45deg); }
+.sidebar-toggle:disabled { opacity: 0.5; cursor: wait; }
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 84px 0 0;
+  z-index: 10;
+  border: 0;
+  background: #0009;
 }
 
 .sidebar {
+  position: fixed;
+  inset: 84px auto 0 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: 260px;
   border-right: 1px solid #292929;
-  padding: 28px 20px;
+  padding: 6px 12px 16px;
   background: #141414;
+  overflow-y: auto;
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform 240ms ease, visibility 240ms;
 }
 
-.sidebar-heading {
+.sidebar.is-open {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.new-note-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin: 5px 0 12px;
+  border: 1px solid #3c3c3c;
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: #1b1b1b;
+  color: #eee;
+  font-weight: 600;
+}
+
+.new-note-button span { color: #aaa; font-size: 21px; line-height: 16px; font-weight: 300; }
+.new-note-button:hover { background: #252525; border-color: #555; }
+
+.sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 0 11px;
+  border: 1px solid #303030;
+  border-radius: 7px;
+  color: #8c8c8c;
+}
+
+.sidebar-search svg { width: 16px; height: 16px; flex: none; }
+.sidebar-search input { min-width: 0; width: 100%; height: 36px; border: 0; outline: 0; background: transparent; color: #fff; font-size: 13px; }
+.sidebar-search:focus-within { border-color: #6a9bc2; }
+.sidebar-search input::placeholder { color: #888; }
+
+.note-list {
+  flex: 1;
+  padding-bottom: 12px;
+}
+
+.note-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  margin-bottom: 3px;
+  border-radius: 7px;
+}
+
+.note-row.active,
+.note-row:hover,
+.note-row:focus-within { background: #292929; }
+.note-row.pinned { background: #1b2832; box-shadow: inset 2px 0 #68a9d7; }
+.note-row.pinned:hover, .note-row.pinned:focus-within { background: #253745; }
+
+.note-list .note-select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
+  gap: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #ccc;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.note-row.active .note-select { color: #fff; }
+.note-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-rename { display: flex; align-items: center; min-width: 0; padding: 4px; }
+.note-rename input { min-width: 0; width: 100%; height: 30px; border: 1px solid #648daf; border-radius: 5px; padding: 4px 7px; outline: 0; background: #1c1c1c; color: #fff; font-size: 13px; }
+.note-list button:disabled { cursor: wait; }
+
+.sidebar-menu { position: relative; }
+.sidebar-menu summary { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; color: #aaa; cursor: pointer; list-style: none; font-size: 23px; line-height: 1; }
+.sidebar-menu summary::-webkit-details-marker { display: none; }
+.sidebar-menu summary:hover, .sidebar-menu[open] summary { background: #333; color: #fff; }
+.note-menu summary { opacity: 0; }
+.note-row:hover .note-menu summary, .note-row:focus-within .note-menu summary { opacity: 1; }
+.sidebar-menu-items { position: absolute; right: 0; top: 34px; z-index: 2; width: 148px; padding: 5px; border: 1px solid #373737; border-radius: 8px; background: #222; box-shadow: 0 8px 24px #0008; }
+.sidebar-menu-items button { display: block; width: 100%; border: 0; border-radius: 5px; padding: 8px 10px; background: transparent; color: #eee; text-align: left; font-size: 13px; }
+.sidebar-menu-items button:hover:not(:disabled) { background: #333; }
+.sidebar-menu-items button.menu-danger { color: #f18b8b; }
+.sidebar-menu-items button:disabled { color: #888; cursor: default; }
+
+.sidebar-account { display: flex; align-items: center; gap: 9px; min-height: 56px; padding: 10px 3px 0; border-top: 1px solid #303030; }
+.profile-icon { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border: 1px solid #454545; border-radius: 50%; color: #bbb; }
+.profile-icon svg { width: 20px; height: 20px; }
+.profile-photo { width: 100%; height: 100%; border-radius: 50%; background-position: center; background-size: cover; }
+.profile-name { min-width: 0; flex: 1; overflow: hidden; color: #eee; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu .sidebar-menu-items { top: auto; bottom: 36px; }
 
 .writing-area {
   max-width: 850px;
@@ -110,19 +247,39 @@
   color: #666;
 }
 
+.signed-in-panel .writing-area { min-height: calc(100vh - 84px); padding-top: 30px; }
+.signed-in-panel .writing-input { min-height: calc(100vh - 164px); }
+.loading-notes { color: #999; font-size: 14px; }
+
+.app-error {
+  margin: 0 48px;
+}
+
 .save-error {
   color: #ff9a9a;
   font-size: 13px;
 }
 
+.retry-save { border: 0; padding: 0; background: transparent; color: #a9d8ff; text-decoration: underline; }
+
+.retry-button {
+  border: 1px solid #414141;
+  border-radius: 9px;
+  padding: 10px 17px;
+  background: #171717;
+  color: #fff;
+}
+
 @media (max-width: 700px) {
-  .app-shell.sidebar-open {
-    grid-template-columns: 1fr;
+  .sidebar {
+    top: 72px;
+    width: min(84vw, 300px);
+    box-shadow: 20px 0 60px #0008;
   }
 
-  .sidebar {
-    border-right: 0;
-    border-bottom: 1px solid #292929;
+  .sidebar-backdrop {
+    display: block;
+    top: 72px;
   }
 
   .site-header {
@@ -139,4 +296,18 @@
     min-height: calc(100vh - 128px);
     font-size: 17px;
   }
+
+  .signed-in-panel .site-header { height: 72px; padding-left: 44px; }
+  .sidebar-toggle[aria-expanded="true"] { left: calc(min(84vw, 300px) - 84px); }
+  .sidebar-open .site-header { background: linear-gradient(to right, #141414 min(84vw, 300px), transparent min(84vw, 300px)); }
+  .signed-in-panel .writing-area { min-height: calc(100vh - 72px); padding-top: 24px; }
+  .signed-in-panel .writing-input { min-height: calc(100vh - 128px); }
+}
+
+@media (hover: none) {
+  .note-menu summary { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .sidebar-toggle, .toggle-line { transition: none; }
 }
