@@ -38,9 +38,14 @@ For the current implementation state and authentication handoff, read `PROGRESS.
 ## Decisions still needed
 
 - Specific screens, user flows, and visual references for the redesign.
-- Whether to keep MongoDB or change the database and data model.
-- Google login provider and how existing email accounts should link to Google accounts.
-- Whether existing user accounts and notes must be migrated.
+- Production environment variables and the final domain setup for authentication and encrypted notes.
+
+## Decisions made
+
+- Keep MongoDB and start with fresh accounts. Do not migrate old accounts or notes.
+- Link Google to an existing email account only after email ownership is verified.
+- Keep the guest draft in browser storage after sign-in; do not import it automatically.
+- Store multiple titled notes in the existing MongoDB `test` database. Encrypt titles and content before storage. A database-only administrator cannot read them; the application server holds the decryption key.
 
 ## Guidance for the next agent
 

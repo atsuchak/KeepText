@@ -1,0 +1,164 @@
+"use client";
+
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { titleFromContent } from "../noteTitle";
+
+export type UserEditorHandle = {
+  flush: () => Promise<boolean>;
+  reset: () => void;
+  prepare: () => void;
+};
+
+type Note = { id: string; title: string; content: string };
+type Props = {
+  ref: Ref<UserEditorHandle>;
+  noteId: string | null;
+  onCreate: (content: string) => Promise<Note>;
+  onCreated: (note: Note) => void;
+  onCreatingChange: (creating: boolean) => void;
+  onTitleChange: (id: string, title: string) => void;
+};
+
+export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange, onTitleChange }: Props) {
+  const [content, setContent] = useState("");
+  const [ready, setReady] = useState(!noteId);
+  const [error, setError] = useState("");
+  const saved = useRef<{ id: string | null; content: string }>({ id: null, content: "" });
+  const latest = useRef("");
+  const currentId = useRef(noteId);
+  const createdId = useRef<string | null>(null);
+  const creating = useRef<Promise<boolean> | null>(null);
+  const saveQueue = useRef(Promise.resolve());
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editor = useRef<HTMLTextAreaElement>(null);
+
+  function save(id: string, value: string): Promise<boolean> {
+    const task = saveQueue.current.then(async () => {
+      const response = await fetch(`/api/notes/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: value }),
+      });
+      if (!response.ok) throw new Error("Save failed");
+    });
+    saveQueue.current = task.catch(() => {});
+    return task.then(() => {
+      if (saved.current.id === id) saved.current.content = value;
+      setError("");
+      return true;
+    }).catch(() => {
+      setError("Could not save this note. Copy your text before leaving.");
+      return false;
+    });
+  }
+
+  function createFromDraft(value: string) {
+    if (creating.current || !value.trim()) return;
+    onCreatingChange(true);
+    creating.current = onCreate(value).then((note) => {
+      saved.current = { id: note.id, content: value };
+      createdId.current = note.id;
+      onCreated({ ...note, title: titleFromContent(latest.current) });
+      setError("");
+      return true;
+    }).catch(() => {
+      setError("Could not create this note. Your text is still here.");
+      return false;
+    }).finally(() => {
+      creating.current = null;
+      onCreatingChange(false);
+    });
+  }
+
+  useEffect(() => {
+    currentId.current = noteId;
+    if (!noteId) {
+      return;
+    }
+    if (createdId.current === noteId) {
+      createdId.current = null;
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/notes/${encodeURIComponent(noteId)}`, { signal: controller.signal, cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not load this note.");
+        return response.json() as Promise<{ content: string }>;
+      })
+      .then((note) => {
+        saved.current = { id: noteId, content: note.content };
+        latest.current = note.content;
+        setContent(note.content);
+        setReady(true);
+        setError("");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError("Could not load this note. Refresh to try again.");
+      });
+    return () => controller.abort();
+  }, [noteId]);
+
+  useEffect(() => {
+    if (ready) editor.current?.focus();
+  }, [ready, noteId]);
+
+  useEffect(() => {
+    if (!ready || !noteId || content === saved.current.content) return;
+    saveTimer.current = setTimeout(() => { saveTimer.current = null; void save(noteId, content); }, 500);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [ready, noteId, content]);
+
+  useImperativeHandle(ref, () => ({
+    reset() {
+      currentId.current = null;
+      createdId.current = null;
+      saved.current = { id: null, content: "" };
+      latest.current = "";
+      setContent("");
+      setReady(true);
+      setError("");
+    },
+    prepare() {
+      setReady(false);
+      setError("");
+    },
+    async flush() {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      if (creating.current && !await creating.current) return false;
+      const id = currentId.current ?? createdId.current;
+      if (!id) return !latest.current.trim();
+      if (saved.current.id === id && latest.current === saved.current.content) return true;
+      return save(id, latest.current);
+    },
+  }));
+
+  return (
+    <main className="writing-area">
+      {error && <p className="save-error" role="alert">{error} <button className="retry-save" type="button" onClick={() => {
+        const id = currentId.current ?? createdId.current;
+        if (id) void save(id, latest.current);
+        else createFromDraft(latest.current);
+      }}>Retry</button></p>}
+      <textarea
+        ref={editor}
+        className="writing-input"
+        aria-label="Your note"
+        placeholder={ready ? "Write your thoughts..." : "Loading your note..."}
+        spellCheck
+        value={content}
+        disabled={!ready}
+        onChange={(event) => {
+          const value = event.target.value;
+          latest.current = value;
+          setContent(value);
+          const id = noteId ?? createdId.current;
+          if (id) onTitleChange(id, titleFromContent(value));
+          else createFromDraft(value);
+        }}
+      />
+    </main>
+  );
+}
