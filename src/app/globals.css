@@ -1,24 +1,12 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: Arial, Helvetica, sans-serif;
-  color: #171717;
-  background: #ffffff;
+  background: #0b0b0b;
+  color: #f7faff;
 }
 
-body {
-  margin: 0;
-}
-
-main {
-  min-height: 100vh;
-  display: grid;
-  place-content: center;
-  gap: 0.5rem;
-  padding: 1.5rem;
-  text-align: center;
-}
-
-h1,
-p {
-  margin: 0;
-}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 2px solid #80c8ff; outline-offset: 3px; }

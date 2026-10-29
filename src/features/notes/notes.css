@@ -1,0 +1,142 @@
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-shell.sidebar-open {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+.main-panel {
+  min-width: 0;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 84px;
+  padding: 0 48px;
+}
+
+.header-left,
+.brand {
+  display: flex;
+  align-items: center;
+}
+
+.header-left {
+  gap: 20px;
+}
+
+.brand {
+  gap: 10px;
+  color: #fff;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.06em;
+  text-decoration: none;
+}
+
+.brand-keep {
+  color: #fff;
+}
+
+.brand-text {
+  color: #62b8ff;
+}
+
+.sign-in-button {
+  border: 1px solid #414141;
+  border-radius: 9px;
+  padding: 10px 17px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sign-in-button:hover,
+.sidebar-toggle:hover,
+.sidebar-heading button:hover {
+  background: #1d1d1d;
+}
+
+.sidebar-toggle,
+.sidebar-heading button {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 22px;
+}
+
+.sidebar {
+  border-right: 1px solid #292929;
+  padding: 28px 20px;
+  background: #141414;
+}
+
+.sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.writing-area {
+  max-width: 850px;
+  min-height: calc(100vh - 84px);
+  margin: 0 auto;
+  padding: 38px 40px 40px;
+}
+
+.writing-input {
+  display: block;
+  width: 100%;
+  min-height: calc(100vh - 162px);
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: #f7f7f7;
+  caret-color: #69b9ff;
+  font-size: 18px;
+  line-height: 1.8;
+}
+
+.writing-input::placeholder {
+  color: #666;
+}
+
+.save-error {
+  color: #ff9a9a;
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .app-shell.sidebar-open {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #292929;
+  }
+
+  .site-header {
+    height: 72px;
+    padding: 0 20px;
+  }
+
+  .writing-area {
+    min-height: calc(100vh - 72px);
+    padding: 24px 24px 32px;
+  }
+
+  .writing-input {
+    min-height: calc(100vh - 128px);
+    font-size: 17px;
+  }
+}
