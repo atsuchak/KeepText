@@ -1,0 +1,31 @@
+.sign-in-page {
+  min-height: 100vh;
+  padding: 26px 48px;
+}
+
+.sign-in-message {
+  max-width: 480px;
+  margin: min(25vh, 180px) auto 0;
+}
+
+.sign-in-message h1 {
+  margin: 0 0 14px;
+  font-size: clamp(28px, 4vw, 40px);
+  letter-spacing: -0.04em;
+}
+
+.sign-in-message p {
+  margin: 0 0 30px;
+  color: #a7a7a7;
+  line-height: 1.6;
+}
+
+.sign-in-message a {
+  color: #7bc2ff;
+}
+
+@media (max-width: 700px) {
+  .sign-in-page {
+    padding: 20px;
+  }
+}

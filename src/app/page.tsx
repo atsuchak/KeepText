@@ -1,9 +1,5 @@
-import { NoteEditor } from "@/components/NoteEditor";
+import { NotesApp } from "@/features/notes/NotesApp";
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 w-full h-full pt-20 sm:pt-24">
-      <NoteEditor />
-    </div>
-  );
+  return <NotesApp isSignedIn={false} />;
 }

@@ -1,67 +1,31 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { ThemeProvider } from "@/components/ThemeProvider";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
-
-const inter = Inter({ subsets: ["latin"] });
+import "@/features/notes/notes.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://blanked-note.vercel.app'),
-  title: {
-    default: "Blanked Note",
-    template: "%s | Blanked Note",
-  },
-  description: "A fast, minimalist notepad right in your browser. Save notes locally or create an account to sync across devices.",
-  keywords: ["notepad", "notes", "minimalist", "blanked note", "online notepad"],
-  authors: [{ name: "Blanked Note" }],
-  creator: "Blanked Note",
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    url: "https://blanked-note.vercel.app",
-    title: "Blanked Note",
-    description: "A fast, minimalist notepad right in your browser.",
-    siteName: "Blanked Note",
-    images: [
-      {
-        url: "/og-image.png", // Make sure to create and place an og-image.png in your public folder
-        width: 1200,
-        height: 630,
-        alt: "Blanked Note",
-      }
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Blanked Note",
-    description: "A fast, minimalist notepad right in your browser.",
-    images: ["/og-image.png"],
-  },
+  title: "KeepText",
+  description: "A simple space for your notes and ideas.",
+  manifest: "/assets/keeptext-favicon/site.webmanifest",
   icons: {
-    icon: '/favicon.svg',
-    apple: '/apple-touch-icon.png',
+    icon: [
+      { url: "/assets/keeptext-favicon/favicon.ico", sizes: "any" },
+      { url: "/assets/keeptext-favicon/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/assets/keeptext-favicon/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: { url: "/assets/keeptext-favicon/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
   },
-  manifest: '/site.webmanifest',
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b0b0b",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning className="h-full">
-      <body className={`${inter.className} min-h-full flex flex-col bg-white dark:bg-black text-gray-900 dark:text-gray-100 transition-colors duration-300`}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-          <Navbar />
-          <main className="flex-1 flex flex-col">
-            {children}
-          </main>
-          <Footer />
-        </ThemeProvider>
-      </body>
+    <html lang="en">
+      <body>{children}</body>
     </html>
   );
 }
