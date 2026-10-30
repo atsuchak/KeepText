@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import "@/features/notes/notes.css";
 import "@/features/auth/sign-in.css";
@@ -41,7 +43,7 @@ export default function RootLayout({
           <a href="https://www.linkedin.com/in/atsuchak/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 10v9M4 5v.01M10 19v-9m0 3.5a4 4 0 0 1 8 0V19" /></svg></a>
           <a href="mailto:ahnaftajwarsuchak@gmail.com" aria-label="Email" title="Email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg></a>
         </nav>
-      </footer></NoticeProvider></body>
+      </footer></NoticeProvider><Analytics /><SpeedInsights /></body>
     </html>
   );
 }
