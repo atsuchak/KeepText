@@ -9,7 +9,7 @@ export type UserEditorHandle = {
   prepare: () => void;
 };
 
-type Note = { id: string; title: string; content: string };
+type Note = { id: string; title: string; content: string; revision: string };
 type Props = {
   ref: Ref<UserEditorHandle>;
   noteId: string | null;
@@ -23,7 +23,7 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
   const [content, setContent] = useState("");
   const [ready, setReady] = useState(!noteId);
   const [error, setError] = useState("");
-  const saved = useRef<{ id: string | null; content: string }>({ id: null, content: "" });
+  const saved = useRef<{ id: string | null; content: string; revision: string }>({ id: null, content: "", revision: "" });
   const latest = useRef("");
   const currentId = useRef(noteId);
   const createdId = useRef<string | null>(null);
@@ -37,17 +37,21 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
       const response = await fetch(`/api/notes/${encodeURIComponent(id)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: value }),
+        body: JSON.stringify({ content: value, revision: saved.current.revision }),
       });
+      if (response.status === 409) throw new Error("conflict");
       if (!response.ok) throw new Error("Save failed");
+      const result = await response.json() as { revision: string };
+      if (saved.current.id === id) saved.current = { id, content: value, revision: result.revision };
     });
     saveQueue.current = task.catch(() => {});
     return task.then(() => {
-      if (saved.current.id === id) saved.current.content = value;
       setError("");
       return true;
-    }).catch(() => {
-      setError("Could not save this note. Copy your text before leaving.");
+    }).catch((cause) => {
+      setError(cause instanceof Error && cause.message === "conflict"
+        ? "This text changed on another device. Your unsaved text is still here. Copy it before refreshing."
+        : "Could not save this note. Copy your text before leaving.");
       return false;
     });
   }
@@ -56,7 +60,7 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
     if (creating.current || !value.trim()) return;
     onCreatingChange(true);
     creating.current = onCreate(value).then((note) => {
-      saved.current = { id: note.id, content: value };
+      saved.current = { id: note.id, content: value, revision: note.revision };
       createdId.current = note.id;
       onCreated({ ...note, title: titleFromContent(latest.current) });
       setError("");
@@ -83,10 +87,10 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
     fetch(`/api/notes/${encodeURIComponent(noteId)}`, { signal: controller.signal, cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("Could not load this note.");
-        return response.json() as Promise<{ content: string }>;
+        return response.json() as Promise<{ content: string; revision: string }>;
       })
       .then((note) => {
-        saved.current = { id: noteId, content: note.content };
+        saved.current = { id: noteId, content: note.content, revision: note.revision };
         latest.current = note.content;
         setContent(note.content);
         setReady(true);
@@ -99,12 +103,40 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
   }, [noteId]);
 
   useEffect(() => {
+    if (!ready || !noteId) return;
+    const id = noteId;
+    let active = true;
+    let checking = false;
+    async function sync() {
+      if (!active || checking || document.visibilityState !== "visible" || latest.current !== saved.current.content || saved.current.id !== id) return;
+      checking = true;
+      const revision = saved.current.revision;
+      try {
+        const response = await fetch(`/api/notes/${encodeURIComponent(id)}`, {
+          headers: { "If-None-Match": `"${revision}"` }, cache: "no-store",
+        });
+        if (response.status === 304 || !response.ok) return;
+        const note = await response.json() as { content: string; title: string; revision: string };
+        if (!active || saved.current.id !== id || saved.current.revision !== revision || latest.current !== saved.current.content) return;
+        saved.current = { id, content: note.content, revision: note.revision };
+        latest.current = note.content;
+        setContent(note.content);
+        onTitleChange(id, note.title);
+      } catch { /* Retry on the next check. */ }
+      finally { checking = false; }
+    }
+    const timer = window.setInterval(sync, 750);
+    document.addEventListener("visibilitychange", sync);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", sync); };
+  }, [ready, noteId, onTitleChange]);
+
+  useEffect(() => {
     if (ready) editor.current?.focus();
   }, [ready, noteId]);
 
   useEffect(() => {
     if (!ready || !noteId || content === saved.current.content) return;
-    saveTimer.current = setTimeout(() => { saveTimer.current = null; void save(noteId, content); }, 500);
+    saveTimer.current = setTimeout(() => { saveTimer.current = null; void save(noteId, content); }, 300);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [ready, noteId, content]);
 
@@ -112,7 +144,7 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
     reset() {
       currentId.current = null;
       createdId.current = null;
-      saved.current = { id: null, content: "" };
+      saved.current = { id: null, content: "", revision: "" };
       latest.current = "";
       setContent("");
       setReady(true);

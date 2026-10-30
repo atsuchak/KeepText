@@ -27,7 +27,8 @@ export function SignInForm({ googleEnabled, initialMode = "sign-in", inDrawer = 
 
   function finishSignIn() {
     queueNotice("Signed in successfully.", true);
-    window.location.replace("/");
+    if (inDrawer) router.refresh();
+    else window.location.replace("/");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
