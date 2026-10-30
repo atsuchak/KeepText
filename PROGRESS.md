@@ -25,7 +25,9 @@
 - Solid near-black UI with a writing area that focuses automatically on page load.
 - Guests can write on one page without creating a note. Text is saved in this browser's local storage.
 - The top-right **Sign in** button opens a right-side drawer with email/password, email OTP, and Google flows. `/sign-in` and `/sign-up` remain available as direct routes.
+- Forgot password now uses an email OTP entered in the sign-in form. The email has branded styling and no link. Previously issued reset links still work through `/reset-password`; the legacy link email now uses a button instead of showing the raw URL in HTML clients.
 - The home route checks a server session. Signed-in users see multiple titled notes, with the sidebar initially closed. Guests see no sidebar control.
+- A fixed site footer credits Ahnaf Tajwar Suchak with a 2026-to-current-year copyright notice and muted icon links for the portfolio, GitHub, LinkedIn, and email. On the writing page, text spans about 70% of the available width, resizing and rewrapping beside the open desktop sidebar. Long notes scroll inside the editor, with a slim scrollbar at the right edge while the header and footer stay in place.
 - Browser tab, Apple, and Android icons use the user's files in `public/assets/keeptext-favicon/`.
 
 ## Important code paths

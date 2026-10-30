@@ -1,15 +1,22 @@
 .app-shell {
-  min-height: 100vh;
+  height: calc(100dvh - var(--site-footer-height));
+  display: flex;
+  flex-direction: column;
 }
 
 .main-panel {
   min-width: 0;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .site-header {
   position: relative;
   z-index: 30;
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   height: 84px;
@@ -56,7 +63,7 @@
 }
 
 .brand-text {
-  color: #62b8ff;
+  color: var(--brand-blue);
 }
 
 .sign-in-button {
@@ -101,7 +108,7 @@
 .sidebar-backdrop {
   display: none;
   position: fixed;
-  inset: 84px 0 0;
+  inset: 84px 0 var(--site-footer-height);
   z-index: 10;
   border: 0;
   background: #0009;
@@ -109,7 +116,7 @@
 
 .sidebar {
   position: fixed;
-  inset: 84px auto 0 0;
+  inset: 84px auto var(--site-footer-height) 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -223,16 +230,20 @@
 .account-menu .sidebar-menu-items { top: auto; bottom: 36px; }
 
 .writing-area {
-  max-width: 850px;
-  min-height: calc(100vh - 84px);
-  margin: 0 auto;
-  padding: 38px 40px 40px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  padding: 38px 0 40px;
 }
 
 .writing-input {
   display: block;
+  flex: 1;
   width: 100%;
-  min-height: calc(100vh - 162px);
+  min-height: 0;
+  padding-inline: 15%;
   border: 0;
   outline: 0;
   resize: none;
@@ -241,14 +252,26 @@
   caret-color: #69b9ff;
   font-size: 18px;
   line-height: 1.8;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb, #44515c) transparent;
+}
+
+.writing-input::-webkit-scrollbar { width: 7px; }
+.writing-input::-webkit-scrollbar-button { display: none; height: 0; }
+.writing-input::-webkit-scrollbar-track { background: transparent; }
+.writing-input::-webkit-scrollbar-thumb { border-radius: 99px; background: var(--scroll-thumb, #44515c); }
+.writing-input::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover, #697b89); }
+.writing-area > .save-error, .loading-notes { margin-inline: 15%; }
+
+@media (min-width: 701px) {
+  .sidebar-open .writing-area { width: calc(100% - 260px); margin-left: 260px; }
 }
 
 .writing-input::placeholder {
   color: #666;
 }
 
-.signed-in-panel .writing-area { min-height: calc(100vh - 84px); padding-top: 30px; }
-.signed-in-panel .writing-input { min-height: calc(100vh - 164px); }
+.signed-in-panel .writing-area { padding-top: 30px; }
 .loading-notes { color: #999; font-size: 14px; }
 
 .app-error {
@@ -288,20 +311,20 @@
   }
 
   .writing-area {
-    min-height: calc(100vh - 72px);
-    padding: 24px 24px 32px;
+    padding: 24px 0 32px;
   }
 
   .writing-input {
-    min-height: calc(100vh - 128px);
+    padding-inline: 24px;
     font-size: 17px;
   }
+
+  .writing-area > .save-error, .loading-notes { margin-inline: 24px; }
 
   .signed-in-panel .site-header { height: 72px; padding-left: 44px; }
   .sidebar-toggle[aria-expanded="true"] { left: calc(min(84vw, 300px) - 84px); }
   .sidebar-open .site-header { background: linear-gradient(to right, #141414 min(84vw, 300px), transparent min(84vw, 300px)); }
-  .signed-in-panel .writing-area { min-height: calc(100vh - 72px); padding-top: 24px; }
-  .signed-in-panel .writing-input { min-height: calc(100vh - 128px); }
+  .signed-in-panel .writing-area { padding-top: 24px; }
 }
 
 @media (hover: none) {
