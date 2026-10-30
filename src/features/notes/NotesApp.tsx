@@ -9,11 +9,12 @@ import { SignedInSidebar } from "./components/SignedInSidebar";
 import { authClient } from "@/features/auth/auth-client";
 import { SignInForm } from "@/features/auth/SignInForm";
 import { consumeNotice, queueNotice, useNotice } from "@/bootstrap/NoticeProvider";
+import { clearCachedNote, clearUserCache, readCachedList, writeCachedList, type CachedSidebarNote } from "./noteCache";
 
-type Props = { isSignedIn: boolean; userName: string; userImage?: string | null; googleEnabled: boolean };
-type SidebarNote = { id: string; title: string; pinned: boolean; customTitle: boolean };
+type Props = { userId: string | null; isSignedIn: boolean; userName: string; userImage?: string | null; googleEnabled: boolean };
+type SidebarNote = CachedSidebarNote;
 
-export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Props) {
+export function NotesApp({ userId, isSignedIn, userName, userImage, googleEnabled }: Props) {
   const router = useRouter();
   const { confirm, notify } = useNotice();
   const authDialog = useRef<HTMLDialogElement>(null);
@@ -21,6 +22,7 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
   const freshDraft = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
+  const [cacheReady, setCacheReady] = useState(false);
   const [creating, setCreating] = useState(false);
   const [notes, setNotes] = useState<SidebarNote[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -30,6 +32,27 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
     const message = consumeNotice(isSignedIn);
     if (message) notify(message);
   }, [isSignedIn, notify]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      const cached = readCachedList(userId);
+      if (cached) {
+        setNotes(cached.notes);
+        setSelectedId(cached.selectedId && cached.notes.some((note) => note.id === cached.selectedId) ? cached.selectedId : cached.selectedId === null ? null : cached.notes[0]?.id ?? null);
+        freshDraft.current = cached.selectedId === null && cached.notes.length > 0;
+        setNotesLoaded(true);
+      }
+      setCacheReady(true);
+    });
+    return () => { active = false; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId && cacheReady && notesLoaded) writeCachedList(userId, notes, selectedId);
+  }, [userId, cacheReady, notesLoaded, notes, selectedId]);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -45,7 +68,7 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
         const result = await response.json() as { notes: SidebarNote[] };
         if (!active) return;
         setNotes(result.notes);
-        if (!loaded || !freshDraft.current) setSelectedId((current) => current ?? result.notes[0]?.id ?? null);
+        if (!freshDraft.current) setSelectedId((current) => current && result.notes.some((note) => note.id === current) ? current : result.notes[0]?.id ?? null);
         if (!loaded) setListError("");
         loaded = true;
         setNotesLoaded(true);
@@ -111,6 +134,7 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
     try {
       const response = await fetch(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Delete failed");
+      if (userId) clearCachedNote(userId, id);
       const remaining = notes.filter((note) => note.id !== id)
         .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.title.localeCompare(b.title));
       setNotes(remaining);
@@ -137,7 +161,7 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
           try {
             const { error } = await authClient.signOut();
             if (error) notify(error.message || "Could not sign out.", "error");
-            else { queueNotice("Signed out successfully.", false); router.refresh(); }
+            else { if (userId) clearUserCache(userId); queueNotice("Signed out successfully.", false); router.refresh(); }
           } catch { notify("Could not sign out.", "error"); }
         }} busy={creating} />
       </>}
@@ -168,7 +192,7 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
 
         {listError && <p className="save-error app-error" role="alert">{listError}</p>}
         {isSignedIn ? notesLoaded
-          ? <UserEditor ref={userEditor} noteId={selectedId} onCreate={createNote} onCreated={noteCreated} onCreatingChange={setCreating} onTitleChange={updateTitle} />
+          ? <UserEditor ref={userEditor} userId={userId!} noteId={selectedId} onCreate={createNote} onCreated={noteCreated} onCreatingChange={setCreating} onTitleChange={updateTitle} />
           : <main className="writing-area">{!listError && <p className="loading-notes">Loading your notes...</p>}</main>
           : <GuestEditor />}
       </div>

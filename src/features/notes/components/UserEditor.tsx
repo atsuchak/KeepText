@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { titleFromContent } from "../noteTitle";
+import { readCachedNote, writeCachedNote } from "../noteCache";
 
 export type UserEditorHandle = {
   flush: () => Promise<boolean>;
@@ -12,6 +13,7 @@ export type UserEditorHandle = {
 type Note = { id: string; title: string; content: string; revision: string };
 type Props = {
   ref: Ref<UserEditorHandle>;
+  userId: string;
   noteId: string | null;
   onCreate: (content: string) => Promise<Note>;
   onCreated: (note: Note) => void;
@@ -19,7 +21,7 @@ type Props = {
   onTitleChange: (id: string, title: string) => void;
 };
 
-export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange, onTitleChange }: Props) {
+export function UserEditor({ ref, userId, noteId, onCreate, onCreated, onCreatingChange, onTitleChange }: Props) {
   const [content, setContent] = useState("");
   const [ready, setReady] = useState(!noteId);
   const [error, setError] = useState("");
@@ -32,7 +34,7 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
 
-  function save(id: string, value: string): Promise<boolean> {
+  const save = useCallback((id: string, value: string): Promise<boolean> => {
     const task = saveQueue.current.then(async () => {
       const response = await fetch(`/api/notes/${encodeURIComponent(id)}`, {
         method: "PUT",
@@ -42,7 +44,10 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
       if (response.status === 409) throw new Error("conflict");
       if (!response.ok) throw new Error("Save failed");
       const result = await response.json() as { revision: string };
-      if (saved.current.id === id) saved.current = { id, content: value, revision: result.revision };
+      if (saved.current.id === id) {
+        saved.current = { id, content: value, revision: result.revision };
+        writeCachedNote(userId, { id, content: latest.current, savedContent: value, revision: result.revision });
+      }
     });
     saveQueue.current = task.catch(() => {});
     return task.then(() => {
@@ -54,13 +59,14 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
         : "Could not save this note. Copy your text before leaving.");
       return false;
     });
-  }
+  }, [userId]);
 
   function createFromDraft(value: string) {
     if (creating.current || !value.trim()) return;
     onCreatingChange(true);
     creating.current = onCreate(value).then((note) => {
       saved.current = { id: note.id, content: value, revision: note.revision };
+      writeCachedNote(userId, { id: note.id, content: latest.current, savedContent: value, revision: note.revision });
       createdId.current = note.id;
       onCreated({ ...note, title: titleFromContent(latest.current) });
       setError("");
@@ -84,14 +90,34 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
       return;
     }
     const controller = new AbortController();
+    const cached = readCachedNote(userId, noteId);
+    if (cached) {
+      saved.current = { id: noteId, content: cached.savedContent, revision: cached.revision };
+      latest.current = cached.content;
+    } else {
+      saved.current = { id: null, content: "", revision: "" };
+      latest.current = "";
+    }
+    queueMicrotask(() => {
+      if (controller.signal.aborted) return;
+      setContent(cached?.content ?? "");
+      setReady(Boolean(cached));
+    });
+    const startingRevision = saved.current.revision;
     fetch(`/api/notes/${encodeURIComponent(noteId)}`, { signal: controller.signal, cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("Could not load this note.");
         return response.json() as Promise<{ content: string; revision: string }>;
       })
       .then((note) => {
+        if (controller.signal.aborted || saved.current.revision !== startingRevision) return;
+        if (latest.current !== saved.current.content) {
+          if (note.revision !== startingRevision) setError("This text changed on another device. Your unsaved text is still here. Copy it before refreshing.");
+          return;
+        }
         saved.current = { id: noteId, content: note.content, revision: note.revision };
         latest.current = note.content;
+        writeCachedNote(userId, { id: noteId, content: note.content, savedContent: note.content, revision: note.revision });
         setContent(note.content);
         setReady(true);
         setError("");
@@ -100,7 +126,7 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
         if (!controller.signal.aborted) setError("Could not load this note. Refresh to try again.");
       });
     return () => controller.abort();
-  }, [noteId]);
+  }, [noteId, userId]);
 
   useEffect(() => {
     if (!ready || !noteId) return;
@@ -138,7 +164,7 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
     if (!ready || !noteId || content === saved.current.content) return;
     saveTimer.current = setTimeout(() => { saveTimer.current = null; void save(noteId, content); }, 300);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [ready, noteId, content]);
+  }, [ready, noteId, content, save]);
 
   useImperativeHandle(ref, () => ({
     reset() {
@@ -151,6 +177,9 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
       setError("");
     },
     prepare() {
+      saved.current = { id: null, content: "", revision: "" };
+      latest.current = "";
+      setContent("");
       setReady(false);
       setError("");
     },
@@ -187,7 +216,10 @@ export function UserEditor({ ref, noteId, onCreate, onCreated, onCreatingChange,
           latest.current = value;
           setContent(value);
           const id = noteId ?? createdId.current;
-          if (id) onTitleChange(id, titleFromContent(value));
+          if (id) {
+            writeCachedNote(userId, { id, content: value, savedContent: saved.current.id === id ? saved.current.content : "", revision: saved.current.id === id ? saved.current.revision : "" });
+            onTitleChange(id, titleFromContent(value));
+          }
           else createFromDraft(value);
         }}
       />
