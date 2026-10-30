@@ -1,13 +1,14 @@
 import "server-only";
 
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
-import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth/minimal";
 import { emailOTP } from "better-auth/plugins";
 import { sendEmail } from "@/integrations/sendEmail";
 import { db, mongoClient } from "@/integrations/mongo";
 
 export const auth = betterAuth({
   database: mongodbAdapter(db, { client: mongoClient }),
+  advanced: { database: { joins: true } },
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
   emailAndPassword: {

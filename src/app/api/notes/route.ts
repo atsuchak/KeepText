@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { decryptField, encryptField } from "@/features/notes/noteEncryption";
 import { titleFromContent } from "@/features/notes/noteTitle";
 import { notes, signedInUserId } from "@/features/notes/notesStore";
@@ -29,6 +29,8 @@ export async function POST(request: Request) {
 
   const id = randomUUID();
   const title = titleFromContent(body.content);
-  await notes.insertOne({ _id: id, userId, title: encryptField(title), content: encryptField(body.content) });
-  return Response.json({ id, title, content: body.content }, { status: 201 });
+  const encryptedContent = encryptField(body.content);
+  await notes.insertOne({ _id: id, userId, title: encryptField(title), content: encryptedContent });
+  const revision = createHash("sha256").update(encryptedContent).digest("base64url");
+  return Response.json({ id, title, content: body.content, revision }, { status: 201 });
 }

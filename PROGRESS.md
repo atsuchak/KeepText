@@ -2,6 +2,8 @@
 
 ## Current work (uncommitted)
 
+- Signed-in notes now check the active text every 750 milliseconds and the sidebar every two seconds while the page is visible. Typing saves after 300 milliseconds of inactivity. Conditional requests avoid sending unchanged text. Saves include an opaque revision so a stale device cannot overwrite newer text; conflicting local text stays in the editor with a warning. This uses the existing encrypted MongoDB fields and needs no validator change.
+- Authentication now uses Better Auth's smaller server import and MongoDB joins. The sign-in drawer and sidebar sign-out refresh the page data without a full browser reload. The configured Atlas `test` database was missing auth lookup indexes; `ensure-auth-indexes.mjs` created indexes for user email, account user ID, session user ID and token, and verification identifier. Run the script with production credentials if production uses a different database.
 - Email/password and Google auth use Better Auth with MongoDB. Email verification uses an OTP sent through Resend. The signup flow passed an isolated in-memory test. A synthetic signup through the local HTTP route returned 200 and Resend accepted the OTP email to its test inbox. Real recipient delivery and Google OAuth remain untested.
 - Auth data now targets the existing MongoDB `test` database, regardless of the Git branch or Atlas project name. The existing MongoDB user has `atlasAdmin`; no new write flag or Codex configuration is needed. Better Auth creates its auth collections on first writes.
 - The user explicitly chose a fresh start and multiple titled notes. The old `test.users` (1 document), `test.notehistories` (13 documents), and `test.verificationtokens` (0 documents) collections were dropped. The `test.notes` validator now allows `_id`, `userId`, `title`, `content`, and optional `pinned` and `customTitle` fields, plus a `userId` index.
@@ -64,6 +66,7 @@ See `src/README.md` for the rest of the folder map. Read the relevant local guid
 
 ## Checks completed
 
+- `npm run lint`, `npm run build`, and the auth, encryption, and note title tests passed after the auto-sync and auth updates. Cross-device browser verification is still pending.
 - `npm run lint` passed.
 - `npm run build` passed, including the auth and multiple-note routes.
 - `node --test src/features/notes/noteEncryption.test.mjs` passed.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Brand } from "./components/Brand";
 import { GuestEditor } from "./components/GuestEditor";
@@ -18,6 +18,7 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
   const { confirm, notify } = useNotice();
   const authDialog = useRef<HTMLDialogElement>(null);
   const userEditor = useRef<UserEditorHandle>(null);
+  const freshDraft = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -32,26 +33,40 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
 
   useEffect(() => {
     if (!isSignedIn) return;
-    fetch("/api/notes", { cache: "no-store" })
-      .then((response) => {
+    let active = true;
+    let checking = false;
+    let loaded = false;
+    async function syncList() {
+      if (!active || checking || document.visibilityState !== "visible") return;
+      checking = true;
+      try {
+        const response = await fetch("/api/notes", { cache: "no-store" });
         if (!response.ok) throw new Error("Could not load notes");
-        return response.json() as Promise<{ notes: SidebarNote[] }>;
-      })
-      .then((result) => {
+        const result = await response.json() as { notes: SidebarNote[] };
+        if (!active) return;
         setNotes(result.notes);
-        setSelectedId(result.notes[0]?.id ?? null);
+        if (!loaded || !freshDraft.current) setSelectedId((current) => current ?? result.notes[0]?.id ?? null);
+        if (!loaded) setListError("");
+        loaded = true;
         setNotesLoaded(true);
-      })
-      .catch(() => setListError("Could not load notes. Refresh the page to try again."));
+      } catch {
+        if (active && !loaded) setListError("Could not load notes. Refresh the page to try again.");
+      } finally { checking = false; }
+    }
+    void syncList();
+    const timer = window.setInterval(syncList, 2000);
+    document.addEventListener("visibilitychange", syncList);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", syncList); };
   }, [isSignedIn]);
 
   async function createNote(content: string) {
     const response = await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) });
     if (!response.ok) throw new Error("Could not create a note.");
-    return response.json() as Promise<{ id: string; title: string; content: string }>;
+    return response.json() as Promise<{ id: string; title: string; content: string; revision: string }>;
   }
 
   function noteCreated(note: { id: string; title: string }) {
+    freshDraft.current = false;
     setNotes((current) => [{ ...note, pinned: false, customTitle: false }, ...current]);
     setSelectedId(note.id);
     setListError("");
@@ -59,15 +74,16 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
 
   async function selectNote(id: string | null) {
     if (creating || await userEditor.current?.flush() === false) return;
+    freshDraft.current = id === null;
     if (id === null) userEditor.current?.reset();
     else if (id !== selectedId) userEditor.current?.prepare();
     setSelectedId(id);
     if (window.innerWidth <= 700) setSidebarOpen(false);
   }
 
-  function updateTitle(id: string, title: string) {
+  const updateTitle = useCallback((id: string, title: string) => {
     setNotes((current) => current.map((note) => note.id === id && !note.customTitle ? { ...note, title: title || "Untitled" } : note));
-  }
+  }, []);
 
   async function renameNote(id: string, title: string) {
     if (id === selectedId && await userEditor.current?.flush() === false) return false;
@@ -121,7 +137,7 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
           try {
             const { error } = await authClient.signOut();
             if (error) notify(error.message || "Could not sign out.", "error");
-            else { queueNotice("Signed out successfully.", false); window.location.reload(); }
+            else { queueNotice("Signed out successfully.", false); router.refresh(); }
           } catch { notify("Could not sign out.", "error"); }
         }} busy={creating} />
       </>}
