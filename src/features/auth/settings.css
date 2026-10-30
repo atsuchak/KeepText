@@ -1,4 +1,4 @@
-.settings-page { min-height: 100vh; background: var(--page-bg, #0b0b0b); color: var(--page-text, #f7faff); }
+.settings-page { min-height: calc(100dvh - var(--site-footer-height)); background: var(--page-bg, #0b0b0b); color: var(--page-text, #f7faff); }
 .settings-header { padding: 24px 56px; }
 .settings-content { max-width: 680px; margin: 24px auto 0; padding: 0 24px 52px; }
 .settings-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
@@ -57,9 +57,8 @@
 .settings-danger .settings-form > button { border-color: #7c4545; color: #f2aaaa; }
 .settings-danger .settings-form > button:hover { background: #512929; }
 
-:root[data-theme="light"] { color-scheme: light; --page-bg: #f8f9fb; --page-text: #1b242b; --muted-text: #5e6870; --card-bg: #fff; --field-bg: #fff; --field-border: #cbd2d8; --hover-bg: #e9eef2; background: var(--page-bg); color: var(--page-text); }
+:root[data-theme="light"] { color-scheme: light; --page-bg: #f8f9fb; --page-text: #1b242b; --muted-text: #5e6870; --card-bg: #fff; --field-bg: #fff; --field-border: #cbd2d8; --hover-bg: #e9eef2; --scroll-thumb: #a9b7c2; --scroll-thumb-hover: #8296a5; --brand-blue: #2274ad; background: var(--page-bg); color: var(--page-text); }
 :root[data-theme="light"] .brand-keep { color: #17212a; }
-:root[data-theme="light"] .brand-text { color: #2274ad; }
 :root[data-theme="light"] .app-shell, :root[data-theme="light"] .sign-in-page { background: var(--page-bg); color: var(--page-text); }
 :root[data-theme="light"] .sidebar, :root[data-theme="light"] .sidebar-open .site-header { background: #eef1f4; }
 :root[data-theme="light"] .sidebar-open .site-header { background: linear-gradient(to right, #eef1f4 260px, transparent 260px); }

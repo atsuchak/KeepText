@@ -8,12 +8,14 @@ import { UserEditor, type UserEditorHandle } from "./components/UserEditor";
 import { SignedInSidebar } from "./components/SignedInSidebar";
 import { authClient } from "@/features/auth/auth-client";
 import { SignInForm } from "@/features/auth/SignInForm";
+import { consumeNotice, queueNotice, useNotice } from "@/bootstrap/NoticeProvider";
 
 type Props = { isSignedIn: boolean; userName: string; userImage?: string | null; googleEnabled: boolean };
 type SidebarNote = { id: string; title: string; pinned: boolean; customTitle: boolean };
 
 export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Props) {
   const router = useRouter();
+  const { confirm, notify } = useNotice();
   const authDialog = useRef<HTMLDialogElement>(null);
   const userEditor = useRef<UserEditorHandle>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -22,6 +24,11 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
   const [notes, setNotes] = useState<SidebarNote[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listError, setListError] = useState("");
+
+  useEffect(() => {
+    const message = consumeNotice(isSignedIn);
+    if (message) notify(message);
+  }, [isSignedIn, notify]);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -106,7 +113,17 @@ export function NotesApp({ isSignedIn, userName, userImage, googleEnabled }: Pro
     <div className={`app-shell${sidebarOpen ? " sidebar-open" : ""}`}>
       {isSignedIn && <>
         {sidebarOpen && <button className="sidebar-backdrop" type="button" aria-label="Close notes sidebar" onClick={() => setSidebarOpen(false)} />}
-        <SignedInSidebar open={sidebarOpen} userName={userName} userImage={userImage} notes={notes} selectedId={selectedId} onSelect={(id) => void selectNote(id)} onNew={() => void selectNote(null)} onRename={renameNote} onPin={pinNote} onDelete={deleteNote} onSettings={async () => { if (await userEditor.current?.flush() === false) return; router.push("/settings"); }} onSignOut={async () => { if (await userEditor.current?.flush() === false) return; await authClient.signOut(); router.refresh(); }} busy={creating} />
+        <SignedInSidebar open={sidebarOpen} userName={userName} userImage={userImage} notes={notes} selectedId={selectedId} onSelect={(id) => void selectNote(id)} onNew={() => void selectNote(null)} onRename={renameNote} onPin={pinNote} onDelete={async (id) => {
+          if (!await confirm({ title: "Delete text?", message: "This text will be permanently deleted. This cannot be undone.", confirmLabel: "Delete text", danger: true })) return false;
+          return deleteNote(id);
+        }} onSettings={async () => { if (await userEditor.current?.flush() === false) return; router.push("/settings"); }} onSignOut={async () => {
+          if (await userEditor.current?.flush() === false) return;
+          try {
+            const { error } = await authClient.signOut();
+            if (error) notify(error.message || "Could not sign out.", "error");
+            else { queueNotice("Signed out successfully.", false); window.location.reload(); }
+          } catch { notify("Could not sign out.", "error"); }
+        }} busy={creating} />
       </>}
 
       <div className={`main-panel${isSignedIn ? " signed-in-panel" : ""}`}>

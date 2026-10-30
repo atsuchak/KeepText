@@ -1,5 +1,5 @@
 .sign-in-page {
-  min-height: 100vh;
+  min-height: calc(100dvh - var(--site-footer-height));
   padding: 32px 48px 48px;
   background: #0b0d0f;
 }
@@ -80,6 +80,11 @@
 .auth-form input::placeholder { color: #a1aab3; opacity: 1; }
 .auth-form input:hover { border-bottom-color: #9aa7b2; }
 .auth-form input:focus-visible { border-bottom: 2px solid #80c8ff; outline: 0; }
+.auth-password { position: relative; display: block; }
+.auth-password input { padding-right: 44px; }
+.auth-password button { position: absolute; top: 0; right: 0; display: grid; width: 40px; height: 46px; place-items: center; border: 0; padding: 0; background: transparent; color: var(--muted-text, #a1aab3); }
+.auth-password button:hover { color: var(--page-text, #f7faff); }
+.auth-password svg { width: 19px; height: 19px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .otp-field { position: relative; display: block; }
 .auth-form .otp-input { position: absolute; inset: 0; z-index: 1; height: 54px; opacity: 0; cursor: text; }

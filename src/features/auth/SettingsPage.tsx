@@ -2,11 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useRef, useState, useSyncExternalStore, type ChangeEvent, type FormEvent } from "react";
 import { Brand } from "@/features/notes/components/Brand";
 import { authClient } from "./auth-client";
+import { queueNotice, useNotice } from "@/bootstrap/NoticeProvider";
 
 type Props = { name: string; email: string; phoneNumber: string; image?: string | null };
+
+function subscribeTheme(callback: () => void) {
+  window.addEventListener("keeptext-theme-change", callback);
+  return () => window.removeEventListener("keeptext-theme-change", callback);
+}
+
+function currentTheme() { return document.documentElement.dataset.theme || "dark"; }
 
 function PasswordField({ label, name, autoComplete, minLength, value, onValueChange }: {
   label: string;
@@ -32,22 +40,21 @@ function PasswordField({ label, name, autoComplete, minLength, value, onValueCha
 
 export function SettingsPage({ name, email, phoneNumber, image }: Props) {
   const router = useRouter();
+  const { confirm } = useNotice();
   const imageInput = useRef<HTMLInputElement>(null);
   const [displayName, setDisplayName] = useState(name);
   const [phone, setPhone] = useState(phoneNumber);
   const [profileImage, setProfileImage] = useState(image || "");
-  const [theme, setTheme] = useState("dark");
+  const theme = useSyncExternalStore(subscribeTheme, currentTheme, () => "dark");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [forgot, setForgot] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
 
-  useEffect(() => { setTheme(document.documentElement.dataset.theme || "dark"); }, []);
-
   function chooseTheme(value: "dark" | "light") {
     document.documentElement.dataset.theme = value;
     localStorage.setItem("keeptext.theme", value);
-    setTheme(value);
+    window.dispatchEvent(new Event("keeptext-theme-change"));
   }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -131,30 +138,30 @@ export function SettingsPage({ name, email, phoneNumber, image }: Props) {
     try {
       const { error } = await authClient.signOut();
       if (error) setMessage(error.message || "Could not sign out.");
-      else window.location.assign("/");
+      else { queueNotice("Signed out successfully.", false); window.location.replace("/"); }
     } catch { setMessage("Could not sign out."); }
     finally { setBusy(false); }
   }
 
   async function signOutEverywhere() {
-    if (!window.confirm("Sign out from every device, including this one?")) return;
+    if (!await confirm({ title: "Sign out everywhere?", message: "All devices, including this one, will need to sign in again.", confirmLabel: "Sign out" })) return;
     setBusy(true); setMessage("");
     try {
       const { error } = await authClient.revokeSessions();
       if (error) setMessage(error.message || "Could not sign out all devices.");
-      else window.location.assign("/");
+      else { queueNotice("Signed out from every device.", false); window.location.replace("/"); }
     } catch { setMessage("Could not sign out all devices."); }
     finally { setBusy(false); }
   }
 
   async function deleteAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!window.confirm("Permanently delete your account and every text? This cannot be undone.")) return;
+    if (!await confirm({ title: "Delete account?", message: "Your account and every text will be permanently deleted. This cannot be undone.", confirmLabel: "Delete account", danger: true })) return;
     setBusy(true); setMessage("");
     try {
       const { error } = await authClient.deleteUser({ password: deletePassword || undefined });
       if (error) setMessage(error.message || "Could not delete account. Sign in again and retry.");
-      else window.location.assign("/");
+      else { queueNotice("Account deleted.", false); window.location.replace("/"); }
     } catch { setMessage("Could not delete account. Sign in again and retry."); }
     finally { setBusy(false); }
   }

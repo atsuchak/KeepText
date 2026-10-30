@@ -4,7 +4,7 @@ import test from "node:test";
 import { betterAuth } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
 
-test("email signup requires OTP verification before password sign-in", async () => {
+test("email signup, sign-in, and password reset use OTP", async () => {
   let otp = "";
   const auth = betterAuth({
     secret: randomBytes(32).toString("base64"),
@@ -35,4 +35,12 @@ test("email signup requires OTP verification before password sign-in", async () 
   assert.match(otp, /^\d{6}$/);
   const otpSignin = await auth.api.signInEmailOTP({ body: { email, otp } });
   assert.ok(otpSignin.token);
+
+  otp = "";
+  await auth.api.requestPasswordResetEmailOTP({ body: { email } });
+  assert.match(otp, /^\d{6}$/);
+  await auth.api.resetPasswordEmailOTP({ body: { email, otp, password: "new-safe-password-456" } });
+  await assert.rejects(auth.api.signInEmail({ body: { email, password } }), { status: "UNAUTHORIZED" });
+  const resetSignin = await auth.api.signInEmail({ body: { email, password: "new-safe-password-456" } });
+  assert.ok(resetSignin.token);
 });

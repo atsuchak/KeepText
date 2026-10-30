@@ -63,7 +63,7 @@ export function SignedInSidebar({ open, userName, userImage, notes, selectedId, 
               <div className="sidebar-menu-items">
                 <button type="button" disabled={busy} onClick={(event) => { event.currentTarget.closest("details")!.open = false; void onPin(note.id, !note.pinned); }}>{note.pinned ? "Unpin" : "Pin"}</button>
                 <button type="button" disabled={busy} onClick={(event) => { event.currentTarget.closest("details")!.open = false; setRenamingId(note.id); setRenameValue(note.title); }}>Rename</button>
-                <button className="menu-danger" type="button" disabled={busy} onClick={(event) => { event.currentTarget.closest("details")!.open = false; if (window.confirm("Delete this text? This cannot be undone.")) void onDelete(note.id); }}>Remove</button>
+                <button className="menu-danger" type="button" disabled={busy} onClick={(event) => { event.currentTarget.closest("details")!.open = false; void onDelete(note.id); }}>Remove</button>
               </div>
             </details>
           </div>
